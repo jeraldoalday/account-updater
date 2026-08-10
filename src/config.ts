@@ -1,14 +1,44 @@
 import "dotenv/config";
+import { z } from "zod";
 
-export const config = {
-  port: Number(process.env.PORT ?? 3000),
-  githubToken: process.env.GITHUB_TOKEN || undefined,
+// dotenv sets blank `KEY=` lines to "", which is not `undefined` and would
+// otherwise bypass zod's `.default()` — treat blank the same as unset.
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return value === undefined || value === "" ? undefined : value;
+}
+
+const configSchema = z.object({
+  port: z.coerce.number().int().positive().default(3000),
+  githubToken: z.string().optional(),
   // When set, callers must send a matching `x-api-key` header. Unset by
   // default so local development doesn't require one.
-  apiKey: process.env.API_KEY || undefined,
-  cacheTtlMs: Number(process.env.CACHE_TTL_MS ?? 10 * 60 * 1000),
+  apiKey: z.string().optional(),
+  cacheTtlMs: z.coerce.number().int().positive().default(10 * 60 * 1000),
   // Applies to /eligibility, the endpoint that clones a repo and calls the
   // GitHub API, so it's the one worth protecting from abuse.
-  rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60 * 1000),
-  rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 20)
-};
+  rateLimitWindowMs: z.coerce.number().int().positive().default(60 * 1000),
+  rateLimitMax: z.coerce.number().int().positive().default(20)
+});
+
+function loadConfig() {
+  const parsed = configSchema.safeParse({
+    port: optionalEnv("PORT"),
+    githubToken: optionalEnv("GITHUB_TOKEN"),
+    apiKey: optionalEnv("API_KEY"),
+    cacheTtlMs: optionalEnv("CACHE_TTL_MS"),
+    rateLimitWindowMs: optionalEnv("RATE_LIMIT_WINDOW_MS"),
+    rateLimitMax: optionalEnv("RATE_LIMIT_MAX")
+  });
+
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((issue) => `${issue.path.join(".") || "(value)"}: ${issue.message}`)
+      .join("; ");
+    throw new Error(`Invalid configuration - check your environment variables: ${issues}`);
+  }
+
+  return parsed.data;
+}
+
+export const config = loadConfig();
