@@ -1,5 +1,7 @@
 # account-updater
 
+[![CI](https://github.com/jeraldoalday/account-updater/actions/workflows/ci.yml/badge.svg)](https://github.com/jeraldoalday/account-updater/actions/workflows/ci.yml)
+
 An HTTP service that checks whether a GitHub repo meets the eligibility
 requirements to connect an account — real, actively-developed first-party
 projects in an eligible language, not scaffolds or a codebase built locally
