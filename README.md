@@ -103,6 +103,18 @@ are exhausted), the endpoint returns 503 with a `Retry-After` header and a
 which may be absent if GitHub didn't report them) instead of a generic 502,
 so callers can back off intelligently rather than retrying immediately.
 
+`POST /eligibility/check-batch`
+
+```json
+{ "repos": ["owner/name-1", "owner/name-2"], "token": "optional-per-request-github-token" }
+```
+
+Checks up to 20 repos in one request (3 at a time), returning
+`{ "results": [...] }` in the same order as `repos`. Each entry is either a
+normal eligibility result or `{ "repo": "...", "error": "...", "rateLimit"?: {...} }`
+— one repo failing (a typo, a private repo the token can't see, a
+rate-limited GitHub call) doesn't fail the rest of the batch.
+
 Results are cached in memory per repo for `CACHE_TTL_MS` (default 10
 minutes) to avoid re-cloning and re-hitting the GitHub API on repeat checks.
 A request that supplies its own `token` is never cached, since a cached

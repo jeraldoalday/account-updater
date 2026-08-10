@@ -107,4 +107,64 @@ describe("app", () => {
     expect(res.body.requestId).toBeTruthy();
     expect(res.headers["x-request-id"]).toBe(res.body.requestId);
   });
+
+  describe("POST /eligibility/check-batch", () => {
+    it("rejects an empty repos array", async () => {
+      const res = await request(createApp()).post("/eligibility/check-batch").send({ repos: [] });
+      expect(res.status).toBe(400);
+      expect(evaluateEligibility).not.toHaveBeenCalled();
+    });
+
+    it("rejects a batch larger than the max size", async () => {
+      const repos = Array.from({ length: 21 }, (_, i) => `owner/repo-${i}`);
+      const res = await request(createApp()).post("/eligibility/check-batch").send({ repos });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/cannot contain more than 20/);
+    });
+
+    it("evaluates each repo and returns results in the same order as the request", async () => {
+      evaluateEligibility.mockImplementation(async (ref: { owner: string; repo: string }) => ({
+        eligible: ref.repo === "good",
+        repo: ref,
+        checks: {},
+        reasons: []
+      }));
+
+      const res = await request(createApp())
+        .post("/eligibility/check-batch")
+        .send({ repos: ["o/good", "o/bad"] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toHaveLength(2);
+      expect(res.body.results[0].eligible).toBe(true);
+      expect(res.body.results[1].eligible).toBe(false);
+    });
+
+    it("isolates a per-repo failure without failing the whole batch", async () => {
+      evaluateEligibility.mockImplementation(async (ref: { owner: string; repo: string }) => {
+        if (ref.repo === "broken") throw new Error("clone failed");
+        return { eligible: true, repo: ref, checks: {}, reasons: [] };
+      });
+
+      const res = await request(createApp())
+        .post("/eligibility/check-batch")
+        .send({ repos: ["o/good", "o/broken"] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results[0].eligible).toBe(true);
+      expect(res.body.results[1].error).toMatch(/clone failed/);
+    });
+
+    it("reports an unparseable repo entry without aborting the rest of the batch", async () => {
+      evaluateEligibility.mockResolvedValue({ eligible: true, repo: {}, checks: {}, reasons: [] });
+
+      const res = await request(createApp())
+        .post("/eligibility/check-batch")
+        .send({ repos: ["not a repo", "o/good"] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results[0].error).toBeTruthy();
+      expect(res.body.results[1].eligible).toBe(true);
+    });
+  });
 });
