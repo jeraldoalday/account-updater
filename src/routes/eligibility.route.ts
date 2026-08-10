@@ -4,8 +4,12 @@ import { parseRepoRef } from "../utils/repoUrl";
 import { evaluateEligibility } from "../eligibility/evaluate";
 import { config } from "../config";
 
+const REPO_REQUIRED_MESSAGE = 'repo is required (e.g. "owner/name" or a GitHub URL)';
+
 const requestSchema = z.object({
-  repo: z.string().min(1, 'repo is required (e.g. "owner/name" or a GitHub URL)'),
+  repo: z
+    .string({ required_error: REPO_REQUIRED_MESSAGE })
+    .min(1, REPO_REQUIRED_MESSAGE),
   // Optional per-request token, e.g. the connecting user's own GitHub OAuth
   // token, so private repos can be evaluated without a shared server token.
   token: z.string().optional()
