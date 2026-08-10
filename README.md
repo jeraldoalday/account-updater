@@ -39,6 +39,10 @@ npm run dev             # or: npm run build && npm start
 
 ## API
 
+If `API_KEY` is set, every `/eligibility/*` request must include a matching
+`x-api-key` header, or it's rejected with 401. Leave `API_KEY` unset for
+local development.
+
 `POST /eligibility/check`
 
 ```json
