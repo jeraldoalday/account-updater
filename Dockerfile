@@ -19,4 +19,7 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 
 EXPOSE 3000
+# No curl/wget in this image (kept minimal) — check via Node's own http client.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD node -e "require('http').get({host:'localhost',port:process.env.PORT||3000,path:'/health',timeout:3000},res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 CMD ["node", "dist/index.js"]

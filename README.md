@@ -50,6 +50,9 @@ docker build -t account-updater .
 docker run --rm -p 3000:3000 --env-file .env account-updater
 ```
 
+or `docker compose up` (reads `.env`; the image reports its own health via
+`docker ps` / `HEALTHCHECK`, polling `GET /health`).
+
 ## API
 
 If `API_KEY` is set, every `/eligibility/*` request must include a matching
