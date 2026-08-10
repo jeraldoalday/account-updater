@@ -1,5 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import type { CommitHistorySummary, PushEventSummary, RepoRef } from "../types";
+import { withRetry } from "./withRetry";
 
 const COMMIT_SAMPLE_CAP = 500; // pages of 100, used for the day-distribution histogram
 const PUSH_EVENT_CAP = 300; // GitHub only retains ~90 days / 300 events anyway
@@ -31,24 +32,28 @@ export class GitHubClient {
 
     // Cheap trick: per_page=1 makes the Link header's "last" page number
     // equal to the exact total commit count, without paginating everything.
-    const firstPageResp = await this.octokit.rest.repos.listCommits({
-      owner,
-      repo,
-      per_page: 1,
-      page: 1
-    });
+    const firstPageResp = await withRetry(() =>
+      this.octokit.rest.repos.listCommits({
+        owner,
+        repo,
+        per_page: 1,
+        page: 1
+      })
+    );
     const totalFromLink = parseLastPage(firstPageResp.headers.link as string | undefined);
     const commitCount = totalFromLink ?? firstPageResp.data.length;
     const lastCommitDate = firstPageResp.data[0]?.commit?.author?.date ?? null;
 
     let firstCommitDate = lastCommitDate;
     if (totalFromLink) {
-      const oldestPageResp = await this.octokit.rest.repos.listCommits({
-        owner,
-        repo,
-        per_page: 1,
-        page: totalFromLink
-      });
+      const oldestPageResp = await withRetry(() =>
+        this.octokit.rest.repos.listCommits({
+          owner,
+          repo,
+          per_page: 1,
+          page: totalFromLink
+        })
+      );
       firstCommitDate = oldestPageResp.data[0]?.commit?.author?.date ?? firstCommitDate;
     }
 
@@ -58,12 +63,14 @@ export class GitHubClient {
     let sampled = 0;
     const pagesToFetch = Math.min(Math.ceil(commitCount / 100), COMMIT_SAMPLE_CAP / 100);
     for (let page = 1; page <= Math.max(pagesToFetch, 1); page++) {
-      const resp = await this.octokit.rest.repos.listCommits({
-        owner,
-        repo,
-        per_page: 100,
-        page
-      });
+      const resp = await withRetry(() =>
+        this.octokit.rest.repos.listCommits({
+          owner,
+          repo,
+          per_page: 100,
+          page
+        })
+      );
       if (resp.data.length === 0) break;
       for (const c of resp.data) {
         const date = c.commit?.author?.date;
@@ -112,12 +119,14 @@ export class GitHubClient {
     for (let page = 1; page <= PUSH_EVENT_CAP / 100; page++) {
       let resp;
       try {
-        resp = await this.octokit.rest.activity.listRepoEvents({
-          owner,
-          repo,
-          per_page: 100,
-          page
-        });
+        resp = await withRetry(() =>
+          this.octokit.rest.activity.listRepoEvents({
+            owner,
+            repo,
+            per_page: 100,
+            page
+          })
+        );
       } catch {
         // Events API can 404/be unavailable for some repos (e.g. no public
         // activity yet); treat as "no signal" rather than failing the check.

@@ -20,7 +20,8 @@ For a given repo, the service:
    first/last commit dates (via the `Link` header on `per_page=1` requests,
    so this is cheap even on huge repos), plus a sampled day-by-day commit
    histogram (capped at the most recent 500 commits) for the history-span
-   check.
+   check. Transient failures (5xx, secondary rate limiting) are retried with
+   exponential backoff before giving up.
 3. Calls the GitHub Events API for recent push events (best-effort, GitHub
    only retains ~90 days / 300 events) as a secondary signal.
 4. Approximates "organically developed vs. bulk-pushed" using two signals:
@@ -52,6 +53,11 @@ docker run --rm -p 3000:3000 --env-file .env account-updater
 If `API_KEY` is set, every `/eligibility/*` request must include a matching
 `x-api-key` header, or it's rejected with 401. Leave `API_KEY` unset for
 local development.
+
+`/eligibility/*` is also rate-limited (20 requests per 60-second window by
+default, keyed by API key or IP — see `RATE_LIMIT_WINDOW_MS` /
+`RATE_LIMIT_MAX`), since each request clones a repo and calls the GitHub
+API. Requests over the limit get a 429 with a `Retry-After` header.
 
 `POST /eligibility/check`
 
