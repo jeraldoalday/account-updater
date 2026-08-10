@@ -37,6 +37,14 @@ npm install
 npm run dev             # or: npm run build && npm start
 ```
 
+Or with Docker (the image includes `git`, which the service shells out to
+for cloning):
+
+```bash
+docker build -t account-updater .
+docker run --rm -p 3000:3000 --env-file .env account-updater
+```
+
 ## API
 
 If `API_KEY` is set, every `/eligibility/*` request must include a matching
