@@ -30,6 +30,14 @@ describe("app", () => {
     expect(typeof res.body.eligibilityChecksTotal).toBe("number");
   });
 
+  it("GET /openapi.json returns a spec describing the eligibility endpoints", async () => {
+    const res = await request(createApp()).get("/openapi.json");
+    expect(res.status).toBe(200);
+    expect(res.body.openapi).toBe("3.0.3");
+    expect(res.body.paths).toHaveProperty("/eligibility/check");
+    expect(res.body.paths).toHaveProperty("/eligibility/check-batch");
+  });
+
   it("POST /eligibility/check rejects a missing repo", async () => {
     const res = await request(createApp()).post("/eligibility/check").send({});
     expect(res.status).toBe(400);

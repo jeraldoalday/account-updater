@@ -55,6 +55,11 @@ or `docker compose up` (reads `.env`; the image reports its own health via
 
 ## API
 
+The full API is described by an OpenAPI 3.0 document served at
+`GET /openapi.json` (hand-maintained in `src/openapi.ts`, checked by tests
+that every `$ref` resolves and that the documented request bodies match
+what the routes actually accept).
+
 If `API_KEY` is set, every `/eligibility/*` request must include a matching
 `x-api-key` header, or it's rejected with 401. Leave `API_KEY` unset for
 local development.

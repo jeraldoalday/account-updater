@@ -8,6 +8,7 @@ import { rateLimit } from "./middleware/rateLimit";
 import { config } from "./config";
 import { version } from "./version";
 import { metrics } from "./metrics/metrics";
+import { openApiSpec } from "./openapi";
 
 export function createApp() {
   const app = express();
@@ -23,6 +24,10 @@ export function createApp() {
 
   app.get("/metrics", (_req, res) => {
     res.status(200).json(metrics.snapshot());
+  });
+
+  app.get("/openapi.json", (_req, res) => {
+    res.status(200).json(openApiSpec);
   });
 
   app.use(
