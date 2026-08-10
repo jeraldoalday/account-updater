@@ -97,6 +97,12 @@ Response:
 `reasons` (top-level and per-check) lists every requirement that failed, so
 the caller can show the connecting user why they weren't eligible.
 
+If GitHub itself rate-limits a request (after the client's built-in retries
+are exhausted), the endpoint returns 503 with a `Retry-After` header and a
+`rateLimit` object (`remaining`, `resetAt`, `retryAfterSeconds`, any of
+which may be absent if GitHub didn't report them) instead of a generic 502,
+so callers can back off intelligently rather than retrying immediately.
+
 Results are cached in memory per repo for `CACHE_TTL_MS` (default 10
 minutes) to avoid re-cloning and re-hitting the GitHub API on repeat checks.
 A request that supplies its own `token` is never cached, since a cached

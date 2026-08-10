@@ -81,6 +81,21 @@ describe("app", () => {
     expect(res.body.error).toMatch(/boom/);
   });
 
+  it("POST /eligibility/check returns 503 with rate-limit info when GitHub rate-limits the request", async () => {
+    evaluateEligibility.mockRejectedValue(
+      Object.assign(new Error("rate limited"), {
+        status: 403,
+        response: { headers: { "retry-after": "42" } }
+      })
+    );
+
+    const res = await request(createApp()).post("/eligibility/check").send({ repo: "o/r" });
+
+    expect(res.status).toBe(503);
+    expect(res.body.rateLimit.retryAfterSeconds).toBe(42);
+    expect(res.headers["retry-after"]).toBe("42");
+  });
+
   it("rejects a malformed JSON body", async () => {
     const res = await request(createApp())
       .post("/eligibility/check")

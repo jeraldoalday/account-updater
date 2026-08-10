@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { parseRepoRef } from "../utils/repoUrl";
 import { evaluateEligibility } from "../eligibility/evaluate";
+import { extractRateLimitInfo } from "../github/rateLimitInfo";
 import { config } from "../config";
 
 const REPO_REQUIRED_MESSAGE = 'repo is required (e.g. "owner/name" or a GitHub URL)';
@@ -41,6 +42,18 @@ eligibilityRouter.post("/check", async (req, res) => {
     const result = await evaluateEligibility(ref, token, { cacheable });
     res.status(200).json(result);
   } catch (err) {
+    const rateLimit = extractRateLimitInfo(err);
+    if (rateLimit) {
+      if (rateLimit.retryAfterSeconds !== undefined) {
+        res.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+      }
+      res.status(503).json({
+        error: `GitHub API rate limit hit while evaluating ${ref.owner}/${ref.repo}. Try again later.`,
+        rateLimit
+      });
+      return;
+    }
+
     res.status(502).json({
       error: `Could not evaluate ${ref.owner}/${ref.repo}: ${(err as Error).message}`
     });
