@@ -33,9 +33,12 @@ eligibilityRouter.post("/check", async (req, res) => {
   }
 
   const token = parsed.data.token ?? config.githubToken;
+  // Never cache a result computed with a caller-supplied token — it may
+  // reflect access to a private repo that other callers don't have.
+  const cacheable = !parsed.data.token;
 
   try {
-    const result = await evaluateEligibility(ref, token);
+    const result = await evaluateEligibility(ref, token, { cacheable });
     res.status(200).json(result);
   } catch (err) {
     res.status(502).json({

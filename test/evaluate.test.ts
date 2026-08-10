@@ -1,0 +1,79 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const getCommitHistorySummary = vi.fn();
+const getPushEventSummary = vi.fn();
+const withShallowClone = vi.fn();
+const scanSource = vi.fn();
+
+vi.mock("../src/github/client", () => ({
+  GitHubClient: vi.fn().mockImplementation(() => ({
+    getCommitHistorySummary,
+    getPushEventSummary
+  }))
+}));
+
+vi.mock("../src/clone/tempClone", () => ({
+  withShallowClone: (...args: unknown[]) => withShallowClone(...args)
+}));
+
+vi.mock("../src/analysis/sourceScan", () => ({
+  scanSource: (...args: unknown[]) => scanSource(...args)
+}));
+
+const { evaluateEligibility } = await import("../src/eligibility/evaluate");
+
+describe("evaluateEligibility caching", () => {
+  beforeEach(() => {
+    getCommitHistorySummary.mockReset().mockResolvedValue({
+      commitCount: 200,
+      firstCommitDate: "2026-01-01T00:00:00Z",
+      lastCommitDate: "2026-01-20T00:00:00Z",
+      historyDays: 19,
+      commitsByDay: {},
+      distinctCommitDays: 15,
+      maxSingleDayCommitShare: 0.1,
+      truncated: false
+    });
+    getPushEventSummary.mockReset().mockResolvedValue({
+      available: false,
+      distinctPushDays: 0,
+      maxSinglePushCommitShare: 0
+    });
+    withShallowClone.mockReset().mockImplementation(async (_ref, _token, fn) => fn("/fake/dir"));
+    scanSource.mockReset().mockResolvedValue({
+      byLanguage: [{ language: "TypeScript", lines: 9000, files: 60 }],
+      totalLines: 9000,
+      totalFiles: 60,
+      primaryLanguage: "TypeScript"
+    });
+  });
+
+  it("computes once and reuses the cached result for cacheable requests", async () => {
+    const ref = { owner: "cache-test-owner", repo: "cache-test-repo" };
+
+    const first = await evaluateEligibility(ref, undefined, { cacheable: true });
+    const second = await evaluateEligibility(ref, undefined, { cacheable: true });
+
+    expect(second).toEqual(first);
+    expect(withShallowClone).toHaveBeenCalledTimes(1);
+    expect(getCommitHistorySummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("recomputes every time for non-cacheable (per-request-token) requests", async () => {
+    const ref = { owner: "cache-test-owner-2", repo: "cache-test-repo-2" };
+
+    await evaluateEligibility(ref, "caller-token", { cacheable: false });
+    await evaluateEligibility(ref, "caller-token", { cacheable: false });
+
+    expect(withShallowClone).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not mix cacheable and non-cacheable results for the same repo", async () => {
+    const ref = { owner: "cache-test-owner-3", repo: "cache-test-repo-3" };
+
+    await evaluateEligibility(ref, undefined, { cacheable: true });
+    await evaluateEligibility(ref, "caller-token", { cacheable: false });
+
+    expect(withShallowClone).toHaveBeenCalledTimes(2);
+  });
+});

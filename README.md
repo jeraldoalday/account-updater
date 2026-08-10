@@ -73,6 +73,12 @@ Response:
 `reasons` (top-level and per-check) lists every requirement that failed, so
 the caller can show the connecting user why they weren't eligible.
 
+Results are cached in memory per repo for `CACHE_TTL_MS` (default 10
+minutes) to avoid re-cloning and re-hitting the GitHub API on repeat checks.
+A request that supplies its own `token` is never cached, since a cached
+result could otherwise leak a private repo's outcome to a caller who
+supplied a different token.
+
 ## Known limitations
 
 - The commit-day histogram and push-event checks are heuristics, not proof:

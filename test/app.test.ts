@@ -42,7 +42,25 @@ describe("app", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(fakeResult);
-    expect(evaluateEligibility).toHaveBeenCalledWith({ owner: "o", repo: "r" }, undefined);
+    expect(evaluateEligibility).toHaveBeenCalledWith(
+      { owner: "o", repo: "r" },
+      undefined,
+      { cacheable: true }
+    );
+  });
+
+  it("marks a request with its own token as non-cacheable", async () => {
+    evaluateEligibility.mockResolvedValue({ eligible: false, repo: {}, checks: {}, reasons: [] });
+
+    await request(createApp())
+      .post("/eligibility/check")
+      .send({ repo: "o/r", token: "caller-token" });
+
+    expect(evaluateEligibility).toHaveBeenCalledWith(
+      { owner: "o", repo: "r" },
+      "caller-token",
+      { cacheable: false }
+    );
   });
 
   it("POST /eligibility/check returns 502 when evaluation fails", async () => {
