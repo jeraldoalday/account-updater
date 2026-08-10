@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { metrics } from "../metrics/metrics";
 
 // Structured (one JSON object per line) so logs are machine-parseable by a
 // log aggregator, with the request ID as the join key across a request's
@@ -7,6 +8,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   const start = process.hrtime.bigint();
   res.on("finish", () => {
     const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+    metrics.recordRequest(res.statusCode);
     console.log(
       JSON.stringify({
         level: "info",

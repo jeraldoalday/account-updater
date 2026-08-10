@@ -23,6 +23,13 @@ describe("app", () => {
     expect(typeof res.body.uptimeSeconds).toBe("number");
   });
 
+  it("GET /metrics returns counters", async () => {
+    const res = await request(createApp()).get("/metrics");
+    expect(res.status).toBe(200);
+    expect(typeof res.body.requestsTotal).toBe("number");
+    expect(typeof res.body.eligibilityChecksTotal).toBe("number");
+  });
+
   it("POST /eligibility/check rejects a missing repo", async () => {
     const res = await request(createApp()).post("/eligibility/check").send({});
     expect(res.status).toBe(400);

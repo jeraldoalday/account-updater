@@ -59,6 +59,14 @@ default, keyed by API key or IP — see `RATE_LIMIT_WINDOW_MS` /
 `RATE_LIMIT_MAX`), since each request clones a repo and calls the GitHub
 API. Requests over the limit get a 429 with a `Retry-After` header.
 
+Every response carries an `x-request-id` header (reusing an incoming one if
+the caller sends it) for correlating a report with server logs, which are
+emitted as structured JSON.
+
+`GET /metrics` returns in-memory counters (request volume by status class,
+eligibility pass/fail counts, cache hit/miss counts) — per-process only, not
+aggregated across instances.
+
 `POST /eligibility/check`
 
 ```json

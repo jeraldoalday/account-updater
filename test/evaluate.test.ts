@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { metrics } from "../src/metrics/metrics";
 
 const getCommitHistorySummary = vi.fn();
 const getPushEventSummary = vi.fn();
@@ -46,6 +47,7 @@ describe("evaluateEligibility caching", () => {
       totalFiles: 60,
       primaryLanguage: "TypeScript"
     });
+    metrics.reset();
   });
 
   it("computes once and reuses the cached result for cacheable requests", async () => {
@@ -57,6 +59,12 @@ describe("evaluateEligibility caching", () => {
     expect(second).toEqual(first);
     expect(withShallowClone).toHaveBeenCalledTimes(1);
     expect(getCommitHistorySummary).toHaveBeenCalledTimes(1);
+
+    const snapshot = metrics.snapshot();
+    expect(snapshot.cacheMisses).toBe(1);
+    expect(snapshot.cacheHits).toBe(1);
+    expect(snapshot.eligibilityChecksTotal).toBe(1);
+    expect(snapshot.eligibilityPassed).toBe(1);
   });
 
   it("recomputes every time for non-cacheable (per-request-token) requests", async () => {

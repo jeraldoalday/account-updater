@@ -7,6 +7,7 @@ import { checkHistory } from "./checks/history";
 import { checkActiveDevelopment } from "./checks/activity";
 import { TtlCache } from "../cache/ttlCache";
 import { config } from "../config";
+import { metrics } from "../metrics/metrics";
 import type { EligibilityResult, RepoRef } from "../types";
 
 export interface EvaluateOptions {
@@ -36,6 +37,8 @@ async function computeEligibility(ref: RepoRef, token: string | undefined): Prom
   const eligible =
     language.passed && size.passed && historyCheck.passed && activeDevelopment.passed;
 
+  metrics.recordEligibilityCheck(eligible);
+
   return {
     eligible,
     repo: ref,
@@ -64,7 +67,11 @@ export async function evaluateEligibility(
 
   if (cacheable) {
     const cached = resultCache.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      metrics.recordCacheHit();
+      return cached;
+    }
+    metrics.recordCacheMiss();
   }
 
   const result = await computeEligibility(ref, token);

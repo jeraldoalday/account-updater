@@ -7,6 +7,7 @@ import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import { rateLimit } from "./middleware/rateLimit";
 import { config } from "./config";
 import { version } from "./version";
+import { metrics } from "./metrics/metrics";
 
 export function createApp() {
   const app = express();
@@ -18,6 +19,10 @@ export function createApp() {
 
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok", version, uptimeSeconds: Math.round(process.uptime()) });
+  });
+
+  app.get("/metrics", (_req, res) => {
+    res.status(200).json(metrics.snapshot());
   });
 
   app.use(
