@@ -82,5 +82,7 @@ describe("app", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/valid JSON/);
+    expect(res.body.requestId).toBeTruthy();
+    expect(res.headers["x-request-id"]).toBe(res.body.requestId);
   });
 });

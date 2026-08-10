@@ -17,10 +17,19 @@ function isMalformedJsonError(err: unknown): err is BodyParserSyntaxError {
 // as an error-handling middleware.
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   if (isMalformedJsonError(err)) {
-    res.status(400).json({ error: "Request body must be valid JSON." });
+    res.status(400).json({ error: "Request body must be valid JSON.", requestId: req.id });
     return;
   }
 
-  console.error(`Unhandled error on ${req.method} ${req.originalUrl}:`, err);
-  res.status(500).json({ error: "Internal server error." });
+  console.error(
+    JSON.stringify({
+      level: "error",
+      requestId: req.id,
+      method: req.method,
+      path: req.originalUrl,
+      message: err instanceof Error ? err.message : String(err),
+      time: new Date().toISOString()
+    })
+  );
+  res.status(500).json({ error: "Internal server error.", requestId: req.id });
 }

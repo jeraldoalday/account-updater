@@ -1,5 +1,6 @@
 import express from "express";
 import { eligibilityRouter } from "./routes/eligibility.route";
+import { requestId } from "./middleware/requestId";
 import { requestLogger } from "./middleware/requestLogger";
 import { errorHandler } from "./middleware/errorHandler";
 import { apiKeyAuth } from "./middleware/apiKeyAuth";
@@ -9,6 +10,9 @@ import { version } from "./version";
 
 export function createApp() {
   const app = express();
+  // Must run before express.json() so a malformed-JSON error (caught by
+  // errorHandler) still has a request ID to report.
+  app.use(requestId);
   app.use(express.json());
   app.use(requestLogger);
 
