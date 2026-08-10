@@ -1,7 +1,9 @@
 import { ALLOWED_LANGUAGES } from "../thresholds";
 import type { CheckResult, SourceScanResult } from "../../types";
 
-export function checkLanguage(scan: SourceScanResult): CheckResult & { primaryLanguage: string | null } {
+export function checkLanguage(
+  scan: SourceScanResult
+): CheckResult & { primaryLanguage: string | null } {
   const primaryLanguage = scan.primaryLanguage;
   const reasons: string[] = [];
 

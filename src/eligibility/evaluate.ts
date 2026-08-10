@@ -24,7 +24,8 @@ export async function evaluateEligibility(
   const historyCheck = checkHistory(history);
   const activeDevelopment = checkActiveDevelopment(history, pushEvents);
 
-  const eligible = language.passed && size.passed && historyCheck.passed && activeDevelopment.passed;
+  const eligible =
+    language.passed && size.passed && historyCheck.passed && activeDevelopment.passed;
 
   return {
     eligible,

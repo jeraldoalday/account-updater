@@ -140,7 +140,8 @@ export class GitHubClient {
     return {
       available: sawAnyEvent && fetched > 0,
       distinctPushDays: pushDays.size,
-      maxSinglePushCommitShare: totalPushedCommits > 0 ? maxSinglePushCommits / totalPushedCommits : 0
+      maxSinglePushCommitShare:
+        totalPushedCommits > 0 ? maxSinglePushCommits / totalPushedCommits : 0
     };
   }
 }

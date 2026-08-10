@@ -5,7 +5,7 @@ import { evaluateEligibility } from "../eligibility/evaluate";
 import { config } from "../config";
 
 const requestSchema = z.object({
-  repo: z.string().min(1, "repo is required (e.g. \"owner/name\" or a GitHub URL)"),
+  repo: z.string().min(1, 'repo is required (e.g. "owner/name" or a GitHub URL)'),
   // Optional per-request token, e.g. the connecting user's own GitHub OAuth
   // token, so private repos can be evaluated without a shared server token.
   token: z.string().optional()

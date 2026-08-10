@@ -106,7 +106,10 @@ describe("checkActiveDevelopment", () => {
   });
 
   it("does not fail on push-event data alone when events are unavailable", () => {
-    const result = checkActiveDevelopment(history(), pushEvents({ available: false, maxSinglePushCommitShare: 1 }));
+    const result = checkActiveDevelopment(
+      history(),
+      pushEvents({ available: false, maxSinglePushCommitShare: 1 })
+    );
     expect(result.passed).toBe(true);
   });
 });

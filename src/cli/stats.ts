@@ -26,7 +26,8 @@ async function main() {
   const historyDays =
     firstCommitDate && lastCommitDate
       ? Math.round(
-          (new Date(lastCommitDate).getTime() - new Date(firstCommitDate).getTime()) / (1000 * 60 * 60 * 24)
+          (new Date(lastCommitDate).getTime() - new Date(firstCommitDate).getTime()) /
+            (1000 * 60 * 60 * 24)
         )
       : 0;
 
@@ -36,16 +37,22 @@ async function main() {
   const maxSingleDayCommitShare =
     commitCount > 0 ? Math.max(...Object.values(commitsByDay)) / commitCount : 0;
 
-  const languagePassed = !!scan.primaryLanguage && (ALLOWED_LANGUAGES as readonly string[]).includes(scan.primaryLanguage);
-  const sizePassed = scan.totalLines >= THRESHOLDS.minLines && scan.totalFiles >= THRESHOLDS.minFiles;
-  const historyPassed = commitCount >= THRESHOLDS.minCommits && historyDays >= THRESHOLDS.minHistoryDays;
+  const languagePassed =
+    !!scan.primaryLanguage &&
+    (ALLOWED_LANGUAGES as readonly string[]).includes(scan.primaryLanguage);
+  const sizePassed =
+    scan.totalLines >= THRESHOLDS.minLines && scan.totalFiles >= THRESHOLDS.minFiles;
+  const historyPassed =
+    commitCount >= THRESHOLDS.minCommits && historyDays >= THRESHOLDS.minHistoryDays;
   const activityPassed =
     distinctCommitDays >= THRESHOLDS.minDistinctCommitDays &&
     maxSingleDayCommitShare <= THRESHOLDS.maxSingleDayCommitShare;
 
   console.log("account-updater self-check (local, uncommitted work not tracked by git)\n");
 
-  console.log(`[${statusIcon(languagePassed)}] language     primary=${scan.primaryLanguage ?? "none"}`);
+  console.log(
+    `[${statusIcon(languagePassed)}] language     primary=${scan.primaryLanguage ?? "none"}`
+  );
   console.log(
     `[${statusIcon(sizePassed)}] size         lines=${scan.totalLines}/${THRESHOLDS.minLines}  files=${scan.totalFiles}/${THRESHOLDS.minFiles}`
   );

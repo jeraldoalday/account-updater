@@ -1,9 +1,7 @@
 import { THRESHOLDS } from "../thresholds";
 import type { CheckResult, CommitHistorySummary } from "../../types";
 
-export function checkHistory(
-  history: CommitHistorySummary
-): CheckResult & {
+export function checkHistory(history: CommitHistorySummary): CheckResult & {
   commitCount: number;
   historyDays: number;
   firstCommitDate: string | null;
@@ -12,7 +10,9 @@ export function checkHistory(
   const reasons: string[] = [];
 
   if (history.commitCount < THRESHOLDS.minCommits) {
-    reasons.push(`Only ${history.commitCount} commits found (need at least ${THRESHOLDS.minCommits}).`);
+    reasons.push(
+      `Only ${history.commitCount} commits found (need at least ${THRESHOLDS.minCommits}).`
+    );
   }
   if (history.historyDays < THRESHOLDS.minHistoryDays) {
     reasons.push(

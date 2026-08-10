@@ -1,6 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
-import { ALLOWED_LANGUAGES, LANGUAGE_EXTENSIONS, type AllowedLanguage } from "../eligibility/thresholds";
+import {
+  ALLOWED_LANGUAGES,
+  LANGUAGE_EXTENSIONS,
+  type AllowedLanguage
+} from "../eligibility/thresholds";
 import type { SourceScanResult } from "../types";
 
 const EXCLUDED_DIRS = new Set([

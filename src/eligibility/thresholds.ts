@@ -1,10 +1,4 @@
-export const ALLOWED_LANGUAGES = [
-  "TypeScript",
-  "JavaScript",
-  "Python",
-  "Go",
-  "Rust"
-] as const;
+export const ALLOWED_LANGUAGES = ["TypeScript", "JavaScript", "Python", "Go", "Rust"] as const;
 
 export type AllowedLanguage = (typeof ALLOWED_LANGUAGES)[number];
 

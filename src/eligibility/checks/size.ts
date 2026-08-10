@@ -1,7 +1,9 @@
 import { THRESHOLDS } from "../thresholds";
 import type { CheckResult, SourceScanResult } from "../../types";
 
-export function checkSize(scan: SourceScanResult): CheckResult & { totalLines: number; totalFiles: number } {
+export function checkSize(
+  scan: SourceScanResult
+): CheckResult & { totalLines: number; totalFiles: number } {
   const reasons: string[] = [];
 
   if (scan.totalLines < THRESHOLDS.minLines) {
