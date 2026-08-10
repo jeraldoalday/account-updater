@@ -4,6 +4,7 @@ import { requestLogger } from "./middleware/requestLogger";
 import { errorHandler } from "./middleware/errorHandler";
 import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import { config } from "./config";
+import { version } from "./version";
 
 export function createApp() {
   const app = express();
@@ -11,7 +12,7 @@ export function createApp() {
   app.use(requestLogger);
 
   app.get("/health", (_req, res) => {
-    res.status(200).json({ status: "ok" });
+    res.status(200).json({ status: "ok", version, uptimeSeconds: Math.round(process.uptime()) });
   });
 
   app.use("/eligibility", apiKeyAuth(config.apiKey), eligibilityRouter);

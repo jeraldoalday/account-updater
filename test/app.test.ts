@@ -15,10 +15,12 @@ describe("app", () => {
     evaluateEligibility.mockReset();
   });
 
-  it("GET /health returns ok", async () => {
+  it("GET /health returns ok with version and uptime", async () => {
     const res = await request(createApp()).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "ok" });
+    expect(res.body.status).toBe("ok");
+    expect(typeof res.body.version).toBe("string");
+    expect(typeof res.body.uptimeSeconds).toBe("number");
   });
 
   it("POST /eligibility/check rejects a missing repo", async () => {
