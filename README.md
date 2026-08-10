@@ -7,6 +7,8 @@ requirements to connect an account — real, actively-developed first-party
 projects in an eligible language, not scaffolds or a codebase built locally
 and pushed all at once. Exact thresholds live in
 `src/eligibility/thresholds.ts` and are intentionally not duplicated here.
+The five known languages (TypeScript, JavaScript, Python, Go, Rust) can be
+narrowed further via `ELIGIBLE_LANGUAGES` — see `.env.example`.
 
 ## How it works
 
