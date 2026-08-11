@@ -84,4 +84,36 @@ describe("evaluateEligibility caching", () => {
 
     expect(withShallowClone).toHaveBeenCalledTimes(2);
   });
+
+  it("coalesces concurrent cache-miss requests for the same repo into one computation", async () => {
+    const ref = { owner: "cache-test-owner-4", repo: "cache-test-repo-4" };
+
+    const [first, second, third] = await Promise.all([
+      evaluateEligibility(ref, undefined, { cacheable: true }),
+      evaluateEligibility(ref, undefined, { cacheable: true }),
+      evaluateEligibility(ref, undefined, { cacheable: true })
+    ]);
+
+    expect(second).toEqual(first);
+    expect(third).toEqual(first);
+    expect(withShallowClone).toHaveBeenCalledTimes(1);
+    expect(getCommitHistorySummary).toHaveBeenCalledTimes(1);
+
+    // The result is cached for later requests too, not just shared among
+    // the concurrent ones.
+    await evaluateEligibility(ref, undefined, { cacheable: true });
+    expect(withShallowClone).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not coalesce concurrent requests for different repos", async () => {
+    const refA = { owner: "cache-test-owner-5a", repo: "cache-test-repo-5a" };
+    const refB = { owner: "cache-test-owner-5b", repo: "cache-test-repo-5b" };
+
+    await Promise.all([
+      evaluateEligibility(refA, undefined, { cacheable: true }),
+      evaluateEligibility(refB, undefined, { cacheable: true })
+    ]);
+
+    expect(withShallowClone).toHaveBeenCalledTimes(2);
+  });
 });

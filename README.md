@@ -135,6 +135,10 @@ The cache backend is `memory` by default (per-process, lost on restart —
 fine for a single instance). Set `CACHE_BACKEND=redis` and `REDIS_URL` to
 share cached results across multiple instances of the service instead.
 
+Concurrent cacheable requests for the same repo that all miss the cache
+share a single in-flight computation rather than each cloning and
+re-checking the repo independently.
+
 ## Known limitations
 
 - The commit-day histogram and push-event checks are heuristics, not proof:

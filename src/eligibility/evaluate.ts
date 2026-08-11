@@ -18,6 +18,13 @@ export interface EvaluateOptions {
 }
 
 const resultCache = createCache<EligibilityResult>();
+// Coalesces concurrent cache-miss requests for the same repo into a single
+// computeEligibility() call. Without this, a burst of requests for a repo
+// that isn't cached yet (e.g. several callers checking the same new repo at
+// once) would each independently clone it and hit the GitHub API. Scoped to
+// this process only — complementary to, not a replacement for, the shared
+// Redis cache backend.
+const inFlight = new Map<string, Promise<EligibilityResult>>();
 
 async function computeEligibility(ref: RepoRef, token: string | undefined): Promise<EligibilityResult> {
   const client = new GitHubClient(token);
@@ -64,20 +71,29 @@ export async function evaluateEligibility(
   const cacheable = options.cacheable ?? true;
   const cacheKey = `${ref.owner}/${ref.repo}`;
 
-  if (cacheable) {
-    const cached = await resultCache.get(cacheKey);
-    if (cached) {
-      metrics.recordCacheHit();
-      return cached;
-    }
-    metrics.recordCacheMiss();
+  if (!cacheable) {
+    return computeEligibility(ref, token);
   }
 
-  const result = await computeEligibility(ref, token);
+  const cached = await resultCache.get(cacheKey);
+  if (cached) {
+    metrics.recordCacheHit();
+    return cached;
+  }
+  metrics.recordCacheMiss();
 
-  if (cacheable) {
-    await resultCache.set(cacheKey, result);
+  const existing = inFlight.get(cacheKey);
+  if (existing) {
+    return existing;
   }
 
-  return result;
+  const pending = computeEligibility(ref, token)
+    .then(async (result) => {
+      await resultCache.set(cacheKey, result);
+      return result;
+    })
+    .finally(() => inFlight.delete(cacheKey));
+
+  inFlight.set(cacheKey, pending);
+  return pending;
 }
