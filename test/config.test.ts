@@ -5,6 +5,8 @@ const ENV_KEYS = [
   "GITHUB_TOKEN",
   "API_KEY",
   "CACHE_TTL_MS",
+  "CACHE_BACKEND",
+  "REDIS_URL",
   "RATE_LIMIT_WINDOW_MS",
   "RATE_LIMIT_MAX"
 ] as const;
@@ -33,6 +35,8 @@ describe("config", () => {
     expect(config.rateLimitMax).toBe(20);
     expect(config.githubToken).toBeUndefined();
     expect(config.apiKey).toBeUndefined();
+    expect(config.cacheBackend).toBe("memory");
+    expect(config.redisUrl).toBeUndefined();
   });
 
   it("treats blank env values the same as unset", async () => {
@@ -53,5 +57,22 @@ describe("config", () => {
 
   it("throws for a non-positive value", async () => {
     await expect(loadConfigWith({ RATE_LIMIT_MAX: "0" })).rejects.toThrow(/Invalid configuration/);
+  });
+
+  it("accepts CACHE_BACKEND=redis when REDIS_URL is set", async () => {
+    const { config } = await loadConfigWith({
+      CACHE_BACKEND: "redis",
+      REDIS_URL: "redis://localhost:6379"
+    });
+    expect(config.cacheBackend).toBe("redis");
+    expect(config.redisUrl).toBe("redis://localhost:6379");
+  });
+
+  it("throws when CACHE_BACKEND=redis but REDIS_URL is unset", async () => {
+    await expect(loadConfigWith({ CACHE_BACKEND: "redis" })).rejects.toThrow(/Invalid configuration/);
+  });
+
+  it("throws for an unrecognized CACHE_BACKEND value", async () => {
+    await expect(loadConfigWith({ CACHE_BACKEND: "memcached" })).rejects.toThrow(/Invalid configuration/);
   });
 });

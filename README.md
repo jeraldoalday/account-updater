@@ -125,11 +125,15 @@ normal eligibility result or `{ "repo": "...", "error": "...", "rateLimit"?: {..
 — one repo failing (a typo, a private repo the token can't see, a
 rate-limited GitHub call) doesn't fail the rest of the batch.
 
-Results are cached in memory per repo for `CACHE_TTL_MS` (default 10
-minutes) to avoid re-cloning and re-hitting the GitHub API on repeat checks.
-A request that supplies its own `token` is never cached, since a cached
-result could otherwise leak a private repo's outcome to a caller who
-supplied a different token.
+Results are cached per repo for `CACHE_TTL_MS` (default 10 minutes) to avoid
+re-cloning and re-hitting the GitHub API on repeat checks. A request that
+supplies its own `token` is never cached, since a cached result could
+otherwise leak a private repo's outcome to a caller who supplied a
+different token.
+
+The cache backend is `memory` by default (per-process, lost on restart —
+fine for a single instance). Set `CACHE_BACKEND=redis` and `REDIS_URL` to
+share cached results across multiple instances of the service instead.
 
 ## Known limitations
 

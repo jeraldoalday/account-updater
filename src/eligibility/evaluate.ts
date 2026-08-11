@@ -5,8 +5,7 @@ import { checkLanguage } from "./checks/language";
 import { checkSize } from "./checks/size";
 import { checkHistory } from "./checks/history";
 import { checkActiveDevelopment } from "./checks/activity";
-import { TtlCache } from "../cache/ttlCache";
-import { config } from "../config";
+import { createCache } from "../cache/createCache";
 import { metrics } from "../metrics/metrics";
 import type { EligibilityResult, RepoRef } from "../types";
 
@@ -18,7 +17,7 @@ export interface EvaluateOptions {
   cacheable?: boolean;
 }
 
-const resultCache = new TtlCache<string, EligibilityResult>(config.cacheTtlMs);
+const resultCache = createCache<EligibilityResult>();
 
 async function computeEligibility(ref: RepoRef, token: string | undefined): Promise<EligibilityResult> {
   const client = new GitHubClient(token);
@@ -66,7 +65,7 @@ export async function evaluateEligibility(
   const cacheKey = `${ref.owner}/${ref.repo}`;
 
   if (cacheable) {
-    const cached = resultCache.get(cacheKey);
+    const cached = await resultCache.get(cacheKey);
     if (cached) {
       metrics.recordCacheHit();
       return cached;
@@ -77,7 +76,7 @@ export async function evaluateEligibility(
   const result = await computeEligibility(ref, token);
 
   if (cacheable) {
-    resultCache.set(cacheKey, result);
+    await resultCache.set(cacheKey, result);
   }
 
   return result;

@@ -1,5 +1,6 @@
 import { createApp } from "./app";
 import { config } from "./config";
+import { closeCache } from "./cache/createCache";
 
 const app = createApp();
 
@@ -14,7 +15,9 @@ function shutdown(signal: string): void {
       console.error("Error while closing the server:", err);
       process.exit(1);
     }
-    process.exit(0);
+    closeCache()
+      .catch((cacheErr) => console.error("Error while closing the cache connection:", cacheErr))
+      .finally(() => process.exit(0));
   });
   // Force-exit if in-flight requests (e.g. a slow clone) don't finish in time.
   setTimeout(() => process.exit(1), 10_000).unref();
