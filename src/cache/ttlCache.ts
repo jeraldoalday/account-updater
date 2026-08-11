@@ -1,15 +1,17 @@
+import type { Cache } from "./cache";
+
 interface Entry<V> {
   value: V;
   expiresAt: number;
 }
 
 /** A minimal in-memory cache where entries expire after a fixed TTL. */
-export class TtlCache<K, V> {
-  private store = new Map<K, Entry<V>>();
+export class TtlCache<V> implements Cache<V> {
+  private store = new Map<string, Entry<V>>();
 
   constructor(private ttlMs: number) {}
 
-  get(key: K): V | undefined {
+  async get(key: string): Promise<V | undefined> {
     const entry = this.store.get(key);
     if (!entry) return undefined;
     if (Date.now() >= entry.expiresAt) {
@@ -19,11 +21,11 @@ export class TtlCache<K, V> {
     return entry.value;
   }
 
-  set(key: K, value: V): void {
+  async set(key: string, value: V): Promise<void> {
     this.store.set(key, { value, expiresAt: Date.now() + this.ttlMs });
   }
 
-  clear(): void {
+  async clear(): Promise<void> {
     this.store.clear();
   }
 }
