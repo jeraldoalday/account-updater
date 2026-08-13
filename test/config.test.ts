@@ -7,6 +7,7 @@ const ENV_KEYS = [
   "CACHE_TTL_MS",
   "CACHE_BACKEND",
   "REDIS_URL",
+  "HISTORY_DB_PATH",
   "RATE_LIMIT_WINDOW_MS",
   "RATE_LIMIT_MAX"
 ] as const;
@@ -37,6 +38,7 @@ describe("config", () => {
     expect(config.apiKey).toBeUndefined();
     expect(config.cacheBackend).toBe("memory");
     expect(config.redisUrl).toBeUndefined();
+    expect(config.historyDbPath).toBe("./data/history.db");
   });
 
   it("treats blank env values the same as unset", async () => {
@@ -46,9 +48,14 @@ describe("config", () => {
   });
 
   it("parses valid overrides", async () => {
-    const { config } = await loadConfigWith({ PORT: "4000", RATE_LIMIT_MAX: "5" });
+    const { config } = await loadConfigWith({
+      PORT: "4000",
+      RATE_LIMIT_MAX: "5",
+      HISTORY_DB_PATH: "/tmp/custom-history.db"
+    });
     expect(config.port).toBe(4000);
     expect(config.rateLimitMax).toBe(5);
+    expect(config.historyDbPath).toBe("/tmp/custom-history.db");
   });
 
   it("throws a clear error for a non-numeric value", async () => {

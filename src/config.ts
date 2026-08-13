@@ -20,6 +20,10 @@ const configSchema = z
     // eligibility results across instances of the service.
     cacheBackend: z.enum(["memory", "redis"]).default("memory"),
     redisUrl: z.string().optional(),
+    // Where the SQLite audit-trail database (one row per evaluation
+    // performed) lives on disk. Relative to the process's cwd unless
+    // absolute.
+    historyDbPath: z.string().default("./data/history.db"),
     // Applies to /eligibility, the endpoint that clones a repo and calls the
     // GitHub API, so it's the one worth protecting from abuse.
     rateLimitWindowMs: z.coerce.number().int().positive().default(60 * 1000),
@@ -38,6 +42,7 @@ function loadConfig() {
     cacheTtlMs: optionalEnv("CACHE_TTL_MS"),
     cacheBackend: optionalEnv("CACHE_BACKEND"),
     redisUrl: optionalEnv("REDIS_URL"),
+    historyDbPath: optionalEnv("HISTORY_DB_PATH"),
     rateLimitWindowMs: optionalEnv("RATE_LIMIT_WINDOW_MS"),
     rateLimitMax: optionalEnv("RATE_LIMIT_MAX")
   });
