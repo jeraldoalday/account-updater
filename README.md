@@ -139,6 +139,13 @@ Concurrent cacheable requests for the same repo that all miss the cache
 share a single in-flight computation rather than each cloning and
 re-checking the repo independently.
 
+Every evaluation actually performed (a cache hit doesn't count again) is
+recorded to a SQLite audit trail — repo, timestamp, eligible, reasons — at
+`HISTORY_DB_PATH` (default `./data/history.db`), so a past result stays
+answerable later rather than only visible as a live snapshot. There's no
+read endpoint over it yet; it's queryable directly against the SQLite file
+for now.
+
 ## Known limitations
 
 - The commit-day histogram and push-event checks are heuristics, not proof:

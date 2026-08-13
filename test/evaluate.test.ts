@@ -5,6 +5,7 @@ const getCommitHistorySummary = vi.fn();
 const getPushEventSummary = vi.fn();
 const withShallowClone = vi.fn();
 const scanSource = vi.fn();
+const recordHistory = vi.fn();
 
 vi.mock("../src/github/client", () => ({
   GitHubClient: vi.fn().mockImplementation(() => ({
@@ -19,6 +20,10 @@ vi.mock("../src/clone/tempClone", () => ({
 
 vi.mock("../src/analysis/sourceScan", () => ({
   scanSource: (...args: unknown[]) => scanSource(...args)
+}));
+
+vi.mock("../src/history/createHistoryStore", () => ({
+  createHistoryStore: () => ({ record: (...args: unknown[]) => recordHistory(...args) })
 }));
 
 const { evaluateEligibility } = await import("../src/eligibility/evaluate");
@@ -47,6 +52,7 @@ describe("evaluateEligibility caching", () => {
       totalFiles: 60,
       primaryLanguage: "TypeScript"
     });
+    recordHistory.mockReset();
     metrics.reset();
   });
 
@@ -103,6 +109,16 @@ describe("evaluateEligibility caching", () => {
     // the concurrent ones.
     await evaluateEligibility(ref, undefined, { cacheable: true });
     expect(withShallowClone).toHaveBeenCalledTimes(1);
+  });
+
+  it("records one history entry per evaluation actually performed, not per request served", async () => {
+    const ref = { owner: "cache-test-owner-6", repo: "cache-test-repo-6" };
+
+    const first = await evaluateEligibility(ref, undefined, { cacheable: true });
+    await evaluateEligibility(ref, undefined, { cacheable: true }); // cache hit
+
+    expect(recordHistory).toHaveBeenCalledTimes(1);
+    expect(recordHistory).toHaveBeenCalledWith(first);
   });
 
   it("does not coalesce concurrent requests for different repos", async () => {

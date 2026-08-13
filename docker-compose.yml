@@ -5,4 +5,9 @@ services:
       - "${PORT:-3000}:3000"
     env_file:
       - .env
+    volumes:
+      - history-data:/app/data
     restart: unless-stopped
+
+volumes:
+  history-data:

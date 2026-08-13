@@ -6,6 +6,7 @@ import { checkSize } from "./checks/size";
 import { checkHistory } from "./checks/history";
 import { checkActiveDevelopment } from "./checks/activity";
 import { createCache } from "../cache/createCache";
+import { createHistoryStore } from "../history/createHistoryStore";
 import { metrics } from "../metrics/metrics";
 import type { EligibilityResult, RepoRef } from "../types";
 
@@ -25,6 +26,7 @@ const resultCache = createCache<EligibilityResult>();
 // this process only — complementary to, not a replacement for, the shared
 // Redis cache backend.
 const inFlight = new Map<string, Promise<EligibilityResult>>();
+const historyStore = createHistoryStore();
 
 async function computeEligibility(ref: RepoRef, token: string | undefined): Promise<EligibilityResult> {
   const client = new GitHubClient(token);
@@ -45,7 +47,7 @@ async function computeEligibility(ref: RepoRef, token: string | undefined): Prom
 
   metrics.recordEligibilityCheck(eligible);
 
-  return {
+  const result: EligibilityResult = {
     eligible,
     repo: ref,
     checks: {
@@ -61,6 +63,16 @@ async function computeEligibility(ref: RepoRef, token: string | undefined): Prom
       ...activeDevelopment.reasons
     ]
   };
+
+  // Best-effort: an audit-trail write failure shouldn't fail the caller's
+  // eligibility check.
+  try {
+    historyStore.record(result);
+  } catch (err) {
+    console.error("Failed to record evaluation history:", err);
+  }
+
+  return result;
 }
 
 export async function evaluateEligibility(
