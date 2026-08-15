@@ -1,8 +1,9 @@
 import { Octokit } from "@octokit/rest";
 import type { CommitHistorySummary, PushEventSummary, RepoRef } from "../types";
 import { withRetry } from "./withRetry";
+import { summarizeCommitSample, type SampledCommit } from "../analysis/commitSample";
 
-const COMMIT_SAMPLE_CAP = 500; // pages of 100, used for the day-distribution histogram
+const COMMIT_SAMPLE_CAP = 500; // pages of 100, used for the day/author/message distributions
 const PUSH_EVENT_CAP = 300; // GitHub only retains ~90 days / 300 events anyway
 
 function dayKey(iso: string): string {
@@ -57,10 +58,10 @@ export class GitHubClient {
       firstCommitDate = oldestPageResp.data[0]?.commit?.author?.date ?? firstCommitDate;
     }
 
-    // Sample recent commits to build a day-of-commit histogram for the
-    // active-development heuristic. Bounded so huge repos stay cheap.
-    const commitsByDay: Record<string, number> = {};
-    let sampled = 0;
+    // Sample recent commits to build the day/author/message distributions
+    // used by the active-development heuristics. Bounded so huge repos stay
+    // cheap - see COMMIT_SAMPLE_CAP.
+    const sample: SampledCommit[] = [];
     const pagesToFetch = Math.min(Math.ceil(commitCount / 100), COMMIT_SAMPLE_CAP / 100);
     for (let page = 1; page <= Math.max(pagesToFetch, 1); page++) {
       const resp = await withRetry(() =>
@@ -73,17 +74,19 @@ export class GitHubClient {
       );
       if (resp.data.length === 0) break;
       for (const c of resp.data) {
-        const date = c.commit?.author?.date;
-        if (!date) continue;
-        commitsByDay[dayKey(date)] = (commitsByDay[dayKey(date)] ?? 0) + 1;
-        sampled++;
+        sample.push({
+          date: c.commit?.author?.date ?? null,
+          // Prefer the stable GitHub login over the free-text git author
+          // name/email, which can vary commit-to-commit for the same person.
+          authorKey: c.author?.login ?? c.commit?.author?.email ?? c.commit?.author?.name ?? null,
+          message: c.commit?.message ?? ""
+        });
       }
       if (resp.data.length < 100) break;
     }
 
-    const distinctCommitDays = Object.keys(commitsByDay).length;
-    const maxDayCount = Math.max(0, ...Object.values(commitsByDay));
-    const maxSingleDayCommitShare = sampled > 0 ? maxDayCount / sampled : 0;
+    const { commitsByDay, distinctCommitDays, maxSingleDayCommitShare, authorStats, messageStats } =
+      summarizeCommitSample(sample);
 
     const historyDays =
       firstCommitDate && lastCommitDate
@@ -104,7 +107,9 @@ export class GitHubClient {
       commitsByDay,
       distinctCommitDays,
       maxSingleDayCommitShare,
-      truncated: sampled < commitCount
+      authorStats,
+      messageStats,
+      truncated: sample.length < commitCount
     };
   }
 

@@ -18,6 +18,18 @@ export interface SourceScanResult {
   primaryLanguage: string | null;
 }
 
+export interface AuthorStats {
+  sampled: number;
+  distinctAuthors: number;
+  maxAuthorShare: number;
+}
+
+export interface CommitMessageStats {
+  sampled: number;
+  distinctMessageRatio: number;
+  genericMessageShare: number;
+}
+
 export interface CommitHistorySummary {
   commitCount: number;
   firstCommitDate: string | null;
@@ -26,6 +38,8 @@ export interface CommitHistorySummary {
   commitsByDay: Record<string, number>;
   distinctCommitDays: number;
   maxSingleDayCommitShare: number;
+  authorStats: AuthorStats;
+  messageStats: CommitMessageStats;
   truncated: boolean;
 }
 
@@ -53,8 +67,11 @@ export interface EligibilityResult {
       lastCommitDate: string | null;
     };
     activeDevelopment: CheckResult & {
+      score: number;
       distinctCommitDays: number;
       maxSingleDayCommitShare: number;
+      authorStats: AuthorStats;
+      messageStats: CommitMessageStats;
       pushEvents: PushEventSummary;
     };
   };
