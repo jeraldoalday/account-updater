@@ -49,6 +49,12 @@ npm install
 npm run dev             # or: npm run build && npm start
 ```
 
+For a higher-rate-limit shared credential than a PAT, set
+`GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY`/`GITHUB_APP_INSTALLATION_ID`
+instead of (or alongside) `GITHUB_TOKEN` — see `.env.example`. A
+per-request `token` or `GITHUB_TOKEN`, when present, always takes
+precedence over the App installation credential.
+
 Or with Docker (the image includes `git`, which the service shells out to
 for cloning):
 
