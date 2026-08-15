@@ -31,12 +31,26 @@ describe("openApiSpec", () => {
   });
 
   it("resolves every $ref to an actual schema (catches typos in hand-written refs)", () => {
-    const refs = collectRefs(openApiSpec.paths);
+    const refs = [
+      ...collectRefs(openApiSpec.paths),
+      ...collectRefs(openApiSpec.components.schemas)
+    ];
     expect(refs.length).toBeGreaterThan(0);
     for (const ref of refs) {
       expect(ref.startsWith("#/components/schemas/")).toBe(true);
       resolveRef(openApiSpec, ref);
     }
+  });
+
+  it("documents the active-development score fields via an allOf extension of CheckResult", () => {
+    const schema = openApiSpec.components.schemas.ActiveDevelopmentCheckResult;
+    expect(schema.allOf[0].$ref).toBe("#/components/schemas/CheckResult");
+    expect(schema.allOf[1].properties.score).toBeTruthy();
+
+    const checks = openApiSpec.components.schemas.EligibilityResult.properties.checks.properties;
+    expect(checks.activeDevelopment.$ref).toBe(
+      "#/components/schemas/ActiveDevelopmentCheckResult"
+    );
   });
 
   it("documents both eligibility endpoints with the request bodies the routes actually accept", () => {

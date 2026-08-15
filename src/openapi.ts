@@ -171,6 +171,47 @@ export const openApiSpec = {
           reasons: { type: "array", items: { type: "string" } }
         }
       },
+      ActiveDevelopmentCheckResult: {
+        description:
+          "Whether commit history looks like organic incremental work rather than a bulk push, " +
+          "expressed as a blended score across four signals (day spread, push-event bulk delivery, " +
+          "commit-message pattern quality, and contributor diversity).",
+        allOf: [
+          { $ref: "#/components/schemas/CheckResult" },
+          {
+            type: "object",
+            properties: {
+              score: { type: "number", minimum: 0, maximum: 1 },
+              distinctCommitDays: { type: "integer" },
+              maxSingleDayCommitShare: { type: "number", minimum: 0, maximum: 1 },
+              authorStats: {
+                type: "object",
+                properties: {
+                  sampled: { type: "integer" },
+                  distinctAuthors: { type: "integer" },
+                  maxAuthorShare: { type: "number", minimum: 0, maximum: 1 }
+                }
+              },
+              messageStats: {
+                type: "object",
+                properties: {
+                  sampled: { type: "integer" },
+                  distinctMessageRatio: { type: "number", minimum: 0, maximum: 1 },
+                  genericMessageShare: { type: "number", minimum: 0, maximum: 1 }
+                }
+              },
+              pushEvents: {
+                type: "object",
+                properties: {
+                  available: { type: "boolean" },
+                  distinctPushDays: { type: "integer" },
+                  maxSinglePushCommitShare: { type: "number", minimum: 0, maximum: 1 }
+                }
+              }
+            }
+          }
+        ]
+      },
       EligibilityResult: {
         type: "object",
         properties: {
@@ -185,7 +226,7 @@ export const openApiSpec = {
               language: { $ref: "#/components/schemas/CheckResult" },
               size: { $ref: "#/components/schemas/CheckResult" },
               history: { $ref: "#/components/schemas/CheckResult" },
-              activeDevelopment: { $ref: "#/components/schemas/CheckResult" }
+              activeDevelopment: { $ref: "#/components/schemas/ActiveDevelopmentCheckResult" }
             }
           },
           reasons: { type: "array", items: { type: "string" } }
