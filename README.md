@@ -26,10 +26,17 @@ For a given repo, the service:
    exponential backoff before giving up.
 3. Calls the GitHub Events API for recent push events (best-effort, GitHub
    only retains ~90 days / 300 events) as a secondary signal.
-4. Approximates "organically developed vs. bulk-pushed" using two signals:
-   commits should land across many distinct days with no single day
-   dominating, and (when push-event data is available) no single push event
-   should account for most of the known commits at once.
+4. Scores "organically developed vs. bulk-pushed" as a weighted blend of
+   four signals rather than an independent pass/fail per signal: commits
+   should land across many distinct days with no single day dominating;
+   (when push-event data is available) no single push event should deliver
+   most of the known commits at once; commit messages should be varied and
+   descriptive rather than templated/generic; and commits should show some
+   contributor diversity (scored leniently, since a single-maintainer repo
+   is common and legitimate on its own). The blended score has to clear
+   `THRESHOLDS.minActiveDevelopmentScore` to pass, so a repo that's mildly
+   off on one signal isn't rejected the same as one that's bad on all of
+   them.
 
 The temp clone is always deleted after the scan, whether it succeeds or
 fails.
@@ -98,7 +105,7 @@ Response:
     "language": { "passed": true, "primaryLanguage": "TypeScript", "reasons": [] },
     "size": { "passed": true, "totalLines": 12000, "totalFiles": 80, "reasons": [] },
     "history": { "passed": true, "commitCount": 210, "historyDays": 45, "...": "..." },
-    "activeDevelopment": { "passed": true, "distinctCommitDays": 30, "...": "..." }
+    "activeDevelopment": { "passed": true, "score": 0.93, "distinctCommitDays": 30, "...": "..." }
   },
   "reasons": []
 }
