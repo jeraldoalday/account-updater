@@ -24,6 +24,8 @@ function history(overrides: Partial<CommitHistorySummary> = {}): CommitHistorySu
     commitsByDay: {},
     distinctCommitDays: 12,
     maxSingleDayCommitShare: 0.2,
+    authorStats: { sampled: 150, distinctAuthors: 3, maxAuthorShare: 0.5 },
+    messageStats: { sampled: 150, distinctMessageRatio: 0.9, genericMessageShare: 0.05 },
     truncated: false,
     ...overrides
   };
@@ -111,5 +113,38 @@ describe("checkActiveDevelopment", () => {
       pushEvents({ available: false, maxSinglePushCommitShare: 1 })
     );
     expect(result.passed).toBe(true);
+  });
+
+  it("exposes a numeric score alongside the pass/fail verdict", () => {
+    const result = checkActiveDevelopment(history(), pushEvents());
+    expect(result.score).toBeGreaterThan(0.9);
+    expect(result.score).toBeLessThanOrEqual(1);
+  });
+
+  it("does not fail a single-maintainer repo on contributor diversity alone", () => {
+    const result = checkActiveDevelopment(
+      history({ authorStats: { sampled: 150, distinctAuthors: 1, maxAuthorShare: 1 } }),
+      pushEvents()
+    );
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails when commit messages are almost entirely generic/templated", () => {
+    const result = checkActiveDevelopment(
+      history({
+        distinctCommitDays: 8,
+        maxSingleDayCommitShare: 0.6,
+        authorStats: { sampled: 150, distinctAuthors: 1, maxAuthorShare: 1 },
+        messageStats: { sampled: 150, distinctMessageRatio: 0.02, genericMessageShare: 0.98 }
+      }),
+      pushEvents({ available: false, maxSinglePushCommitShare: 0 })
+    );
+    expect(result.passed).toBe(false);
+    expect(result.reasons.some((r) => r.includes("generic/templated"))).toBe(true);
+  });
+
+  it("still fails a near-total single-push dump even with otherwise strong signals", () => {
+    const result = checkActiveDevelopment(history(), pushEvents({ maxSinglePushCommitShare: 0.95 }));
+    expect(result.passed).toBe(false);
   });
 });

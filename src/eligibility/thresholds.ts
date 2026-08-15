@@ -50,10 +50,30 @@ export const THRESHOLDS = {
   minCommits: 140,
   minHistoryDays: 14,
   // Active-development / "not a bulk push" heuristic, based on the calendar
-  // days on which commits were authored across the commit history.
+  // days on which commits were authored across the commit history. These
+  // are now soft calibration points for a continuous score (see
+  // activeDevelopmentWeights below) rather than independent pass/fail
+  // cutoffs, so a repo that's slightly over on one signal isn't rejected
+  // the same as one that's egregiously over on all of them.
   minDistinctCommitDays: 8,
   maxSingleDayCommitShare: 0.6,
   // If a single GitHub push event landed this share (or more) of all known
   // commits at once, treat that as a strong bulk-push signal.
-  maxSinglePushEventCommitShare: 0.8
+  maxSinglePushEventCommitShare: 0.8,
+
+  // How much each organic-development signal contributes to the blended
+  // activeDevelopment score. Day-share (spread across many days, not
+  // concentrated on one) and push-bulk (not delivered as one big push) are
+  // weighted heaviest since they're the most direct evidence of pacing.
+  // Commit-message variety is next - templated/bulk history tends to reuse
+  // a small pool of generic messages. Contributor diversity is weighted
+  // lightest and scored leniently, since a single-maintainer repo is common
+  // and legitimate on its own.
+  activeDevelopmentWeights: {
+    daySpread: 0.4,
+    pushBulk: 0.25,
+    messageQuality: 0.2,
+    contributorDiversity: 0.15
+  },
+  minActiveDevelopmentScore: 0.8
 };

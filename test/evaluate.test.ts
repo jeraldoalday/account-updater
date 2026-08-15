@@ -38,6 +38,8 @@ describe("evaluateEligibility caching", () => {
       commitsByDay: {},
       distinctCommitDays: 15,
       maxSingleDayCommitShare: 0.1,
+      authorStats: { sampled: 200, distinctAuthors: 3, maxAuthorShare: 0.5 },
+      messageStats: { sampled: 200, distinctMessageRatio: 0.9, genericMessageShare: 0.05 },
       truncated: false
     });
     getPushEventSummary.mockReset().mockResolvedValue({
