@@ -1,76 +1,77 @@
 import { execFileSync } from "node:child_process";
 import { scanSource } from "../analysis/sourceScan";
-import { ALLOWED_LANGUAGES, THRESHOLDS } from "../eligibility/thresholds";
+import { buildLocalHistorySummary } from "./localHistory";
+import { checkLanguage } from "../eligibility/checks/language";
+import { checkSize } from "../eligibility/checks/size";
+import { checkHistory } from "../eligibility/checks/history";
+import { checkActiveDevelopment } from "../eligibility/checks/activity";
+import type { SampledCommit } from "../analysis/commitSample";
+import type { PushEventSummary } from "../types";
 
-function dayKey(iso: string): string {
-  return iso.slice(0, 10);
-}
+const RECORD_SEP = "\x1f"; // unit separator - won't appear in author/subject text
 
-function getLocalCommitDates(): string[] {
-  const out = execFileSync("git", ["log", "--pretty=format:%aI"], { encoding: "utf8" });
-  return out.split("\n").filter(Boolean);
+function getLocalCommits(): SampledCommit[] {
+  const out = execFileSync("git", ["log", `--pretty=format:%aI${RECORD_SEP}%ae${RECORD_SEP}%s`], {
+    encoding: "utf8"
+  });
+  return out
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [date, authorKey, message] = line.split(RECORD_SEP);
+      return { date: date || null, authorKey: authorKey || null, message: message ?? "" };
+    });
 }
 
 function statusIcon(passed: boolean): string {
   return passed ? "PASS" : "FAIL";
 }
 
+// Local git history has no GitHub push-event data, so that signal is
+// reported as unavailable (neutral) rather than penalized.
+const NO_PUSH_EVENTS: PushEventSummary = {
+  available: false,
+  distinctPushDays: 0,
+  maxSinglePushCommitShare: 0
+};
+
 async function main() {
   const scan = await scanSource(process.cwd());
-  const dates = getLocalCommitDates();
+  const history = buildLocalHistorySummary(getLocalCommits());
 
-  const commitCount = dates.length;
-  const sorted = [...dates].sort();
-  const firstCommitDate = sorted[0] ?? null;
-  const lastCommitDate = sorted[sorted.length - 1] ?? null;
-  const historyDays =
-    firstCommitDate && lastCommitDate
-      ? Math.round(
-          (new Date(lastCommitDate).getTime() - new Date(firstCommitDate).getTime()) /
-            (1000 * 60 * 60 * 24)
-        )
-      : 0;
-
-  const commitsByDay: Record<string, number> = {};
-  for (const d of dates) commitsByDay[dayKey(d)] = (commitsByDay[dayKey(d)] ?? 0) + 1;
-  const distinctCommitDays = Object.keys(commitsByDay).length;
-  const maxSingleDayCommitShare =
-    commitCount > 0 ? Math.max(...Object.values(commitsByDay)) / commitCount : 0;
-
-  const languagePassed =
-    !!scan.primaryLanguage &&
-    (ALLOWED_LANGUAGES as readonly string[]).includes(scan.primaryLanguage);
-  const sizePassed =
-    scan.totalLines >= THRESHOLDS.minLines && scan.totalFiles >= THRESHOLDS.minFiles;
-  const historyPassed =
-    commitCount >= THRESHOLDS.minCommits && historyDays >= THRESHOLDS.minHistoryDays;
-  const activityPassed =
-    distinctCommitDays >= THRESHOLDS.minDistinctCommitDays &&
-    maxSingleDayCommitShare <= THRESHOLDS.maxSingleDayCommitShare;
+  // Runs the same check functions the live service evaluates against, so
+  // this self-check can't silently drift from real eligibility behavior.
+  const language = checkLanguage(scan);
+  const size = checkSize(scan);
+  const historyCheck = checkHistory(history);
+  const activity = checkActiveDevelopment(history, NO_PUSH_EVENTS);
 
   console.log("account-updater self-check (local, uncommitted work not tracked by git)\n");
 
+  console.log(`[${statusIcon(language.passed)}] language     primary=${language.primaryLanguage ?? "none"}`);
   console.log(
-    `[${statusIcon(languagePassed)}] language     primary=${scan.primaryLanguage ?? "none"}`
+    `[${statusIcon(size.passed)}] size         lines=${size.totalLines}  files=${size.totalFiles}`
   );
   console.log(
-    `[${statusIcon(sizePassed)}] size         lines=${scan.totalLines}/${THRESHOLDS.minLines}  files=${scan.totalFiles}/${THRESHOLDS.minFiles}`
+    `[${statusIcon(historyCheck.passed)}] history      commits=${historyCheck.commitCount}  spanDays=${historyCheck.historyDays}`
   );
   console.log(
-    `[${statusIcon(historyPassed)}] history      commits=${commitCount}/${THRESHOLDS.minCommits}  spanDays=${historyDays}/${THRESHOLDS.minHistoryDays}`
+    `[${statusIcon(activity.passed)}] activity     score=${activity.score.toFixed(2)}  ` +
+      `distinctDays=${activity.distinctCommitDays}  maxDayShare=${(activity.maxSingleDayCommitShare * 100).toFixed(0)}%  ` +
+      `authors=${activity.authorStats.distinctAuthors}  genericMsgs=${(activity.messageStats.genericMessageShare * 100).toFixed(0)}%`
   );
-  console.log(
-    `[${statusIcon(activityPassed)}] activity     distinctDays=${distinctCommitDays}/${THRESHOLDS.minDistinctCommitDays}  maxDayShare=${(maxSingleDayCommitShare * 100).toFixed(0)}%/${THRESHOLDS.maxSingleDayCommitShare * 100}%`
-  );
+
+  for (const check of [language, size, historyCheck, activity]) {
+    for (const reason of check.reasons) console.log(`    - ${reason}`);
+  }
 
   console.log(`\nby language:`);
   for (const s of scan.byLanguage) {
     console.log(`  ${s.language}: ${s.lines} lines, ${s.files} files`);
   }
 
-  console.log(
-    `\noverall: ${languagePassed && sizePassed && historyPassed && activityPassed ? "ELIGIBLE" : "NOT YET ELIGIBLE"}`
-  );
+  const eligible = language.passed && size.passed && historyCheck.passed && activity.passed;
+  console.log(`\noverall: ${eligible ? "ELIGIBLE" : "NOT YET ELIGIBLE"}`);
 }
 
 main().catch((err) => {
