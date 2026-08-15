@@ -2,6 +2,8 @@ import { Octokit } from "@octokit/rest";
 import type { CommitHistorySummary, PushEventSummary, RepoRef } from "../types";
 import { withRetry } from "./withRetry";
 import { summarizeCommitSample, type SampledCommit } from "../analysis/commitSample";
+import { resolveOctokitAuth } from "./octokitAuth";
+import { config } from "../config";
 
 const COMMIT_SAMPLE_CAP = 500; // pages of 100, used for the day/author/message distributions
 const PUSH_EVENT_CAP = 300; // GitHub only retains ~90 days / 300 events anyway
@@ -25,7 +27,7 @@ export class GitHubClient {
   private octokit: Octokit;
 
   constructor(token?: string) {
-    this.octokit = new Octokit(token ? { auth: token } : {});
+    this.octokit = new Octokit(resolveOctokitAuth(token, config.githubAppAuthConfig));
   }
 
   async getCommitHistorySummary(ref: RepoRef): Promise<CommitHistorySummary> {

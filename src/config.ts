@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import type { GitHubAppAuthConfig } from "./github/octokitAuth";
 
 // dotenv sets blank `KEY=` lines to "", which is not `undefined` and would
 // otherwise bypass zod's `.default()` — treat blank the same as unset.
@@ -12,6 +13,14 @@ const configSchema = z
   .object({
     port: z.coerce.number().int().positive().default(3000),
     githubToken: z.string().optional(),
+    // Alternative to githubToken: authenticate as a GitHub App installation
+    // instead of a shared PAT (higher rate limits, no long-lived secret to
+    // leak). Used only when no token (caller-supplied or githubToken) is
+    // available for a request - see resolveOctokitAuth(). Must be set
+    // together or not at all.
+    githubAppId: z.string().optional(),
+    githubAppPrivateKey: z.string().optional(),
+    githubAppInstallationId: z.coerce.number().int().positive().optional(),
     // When set, callers must send a matching `x-api-key` header. Unset by
     // default so local development doesn't require one.
     apiKey: z.string().optional(),
@@ -32,12 +41,28 @@ const configSchema = z
   .refine((data) => data.cacheBackend !== "redis" || data.redisUrl !== undefined, {
     message: "REDIS_URL is required when CACHE_BACKEND=redis",
     path: ["redisUrl"]
-  });
+  })
+  .refine(
+    (data) => {
+      const set = [data.githubAppId, data.githubAppPrivateKey, data.githubAppInstallationId].filter(
+        (value) => value !== undefined
+      );
+      return set.length === 0 || set.length === 3;
+    },
+    {
+      message:
+        "GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_APP_INSTALLATION_ID must all be set together, or all left unset",
+      path: ["githubAppId"]
+    }
+  );
 
 function loadConfig() {
   const parsed = configSchema.safeParse({
     port: optionalEnv("PORT"),
     githubToken: optionalEnv("GITHUB_TOKEN"),
+    githubAppId: optionalEnv("GITHUB_APP_ID"),
+    githubAppPrivateKey: optionalEnv("GITHUB_APP_PRIVATE_KEY"),
+    githubAppInstallationId: optionalEnv("GITHUB_APP_INSTALLATION_ID"),
     apiKey: optionalEnv("API_KEY"),
     cacheTtlMs: optionalEnv("CACHE_TTL_MS"),
     cacheBackend: optionalEnv("CACHE_BACKEND"),
@@ -54,7 +79,20 @@ function loadConfig() {
     throw new Error(`Invalid configuration - check your environment variables: ${issues}`);
   }
 
-  return parsed.data;
+  const data = parsed.data;
+
+  // .env files often can't hold real newlines in a PEM key, so the
+  // convention is to escape them as literal "\n" and unescape here.
+  const githubAppAuthConfig: GitHubAppAuthConfig | undefined =
+    data.githubAppId && data.githubAppPrivateKey && data.githubAppInstallationId
+      ? {
+          appId: data.githubAppId,
+          privateKey: data.githubAppPrivateKey.replace(/\\n/g, "\n"),
+          installationId: data.githubAppInstallationId
+        }
+      : undefined;
+
+  return { ...data, githubAppAuthConfig };
 }
 
 export const config = loadConfig();

@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const ENV_KEYS = [
   "PORT",
   "GITHUB_TOKEN",
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY",
+  "GITHUB_APP_INSTALLATION_ID",
   "API_KEY",
   "CACHE_TTL_MS",
   "CACHE_BACKEND",
@@ -35,6 +38,7 @@ describe("config", () => {
     expect(config.rateLimitWindowMs).toBe(60 * 1000);
     expect(config.rateLimitMax).toBe(20);
     expect(config.githubToken).toBeUndefined();
+    expect(config.githubAppAuthConfig).toBeUndefined();
     expect(config.apiKey).toBeUndefined();
     expect(config.cacheBackend).toBe("memory");
     expect(config.redisUrl).toBeUndefined();
@@ -81,5 +85,25 @@ describe("config", () => {
 
   it("throws for an unrecognized CACHE_BACKEND value", async () => {
     await expect(loadConfigWith({ CACHE_BACKEND: "memcached" })).rejects.toThrow(/Invalid configuration/);
+  });
+
+  it("builds githubAppAuthConfig and unescapes literal \\n sequences in the private key when all three GitHub App vars are set", async () => {
+    const { config } = await loadConfigWith({
+      GITHUB_APP_ID: "12345",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\\nfake\\n-----END RSA PRIVATE KEY-----",
+      GITHUB_APP_INSTALLATION_ID: "67890"
+    });
+    expect(config.githubAppAuthConfig).toEqual({
+      appId: "12345",
+      privateKey: "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----",
+      installationId: 67890
+    });
+  });
+
+  it("throws when only some of the GitHub App auth vars are set", async () => {
+    await expect(loadConfigWith({ GITHUB_APP_ID: "12345" })).rejects.toThrow(/Invalid configuration/);
+    await expect(
+      loadConfigWith({ GITHUB_APP_ID: "12345", GITHUB_APP_PRIVATE_KEY: "key" })
+    ).rejects.toThrow(/must all be set together/);
   });
 });
