@@ -70,6 +70,14 @@ function countLines(content: string): number {
 async function walk(dir: string, relativeTo: string, out: string[]): Promise<void> {
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
+    // A cloned repo is untrusted input and could commit a symlink pointing
+    // outside the temp clone dir (e.g. at /etc/passwd or another absolute
+    // path). `Dirent` type checks reflect the directory entry itself
+    // (lstat-like) rather than the symlink target, so `isDirectory()`/
+    // `isFile()` are already both false for a symlink - this check makes
+    // that skip explicit and tested rather than relying on that implicit
+    // behavior surviving future refactors.
+    if (entry.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRS.has(entry.name)) continue;
       await walk(join(dir, entry.name), relativeTo, out);

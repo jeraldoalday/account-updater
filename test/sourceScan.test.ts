@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -56,5 +56,38 @@ describe("scanSource", () => {
 
     expect(result.primaryLanguage).toBeNull();
     expect(result.totalFiles).toBe(0);
+  });
+
+  it("does not follow a symlinked file pointing outside the scanned tree", async () => {
+    const outsideDir = await mkdtemp(join(tmpdir(), "source-scan-outside-"));
+    try {
+      const outsideFile = join(outsideDir, "secret.ts");
+      await writeFile(outsideFile, Array(50).fill("secret line").join("\n"));
+      await writeFile(join(dir, "real.ts"), "a\nb\n");
+      await symlink(outsideFile, join(dir, "link.ts"));
+
+      const result = await scanSource(dir);
+
+      expect(result.totalFiles).toBe(1);
+      expect(result.totalLines).toBe(2);
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not descend into a symlinked directory pointing outside the scanned tree", async () => {
+    const outsideDir = await mkdtemp(join(tmpdir(), "source-scan-outside-"));
+    try {
+      await writeFile(join(outsideDir, "other.ts"), "a\nb\nc\n");
+      await writeFile(join(dir, "real.ts"), "a\n");
+      await symlink(outsideDir, join(dir, "linked-dir"));
+
+      const result = await scanSource(dir);
+
+      expect(result.totalFiles).toBe(1);
+      expect(result.totalLines).toBe(1);
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
   });
 });
