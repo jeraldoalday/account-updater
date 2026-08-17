@@ -47,34 +47,33 @@ export class GitHubClient {
     const commitCount = totalFromLink ?? firstPageResp.data.length;
     const lastCommitDate = firstPageResp.data[0]?.commit?.author?.date ?? null;
 
-    let firstCommitDate = lastCommitDate;
-    if (totalFromLink) {
-      const oldestPageResp = await withRetry(() =>
-        this.octokit.rest.repos.listCommits({
-          owner,
-          repo,
-          per_page: 1,
-          page: totalFromLink
-        })
-      );
-      firstCommitDate = oldestPageResp.data[0]?.commit?.author?.date ?? firstCommitDate;
-    }
+    // The oldest-commit lookup and the sample pages below are all
+    // independent GitHub calls once `commitCount` is known - fire them
+    // concurrently instead of one round-trip at a time. The exact page
+    // count already comes from the Link header, so there's no need to fetch
+    // sequentially just to detect "ran out of pages" (a `# < 100` page still
+    // happens if the true count changes between calls, e.g. new commits
+    // landing mid-check; the sample simply reflects what came back).
+    const pagesToFetch = Math.max(Math.min(Math.ceil(commitCount / 100), COMMIT_SAMPLE_CAP / 100), 1);
+
+    const [oldestPageResp, ...pageResps] = await Promise.all([
+      totalFromLink
+        ? withRetry(() =>
+            this.octokit.rest.repos.listCommits({ owner, repo, per_page: 1, page: totalFromLink })
+          )
+        : null,
+      ...Array.from({ length: pagesToFetch }, (_, i) =>
+        withRetry(() => this.octokit.rest.repos.listCommits({ owner, repo, per_page: 100, page: i + 1 }))
+      )
+    ]);
+
+    const firstCommitDate = oldestPageResp?.data[0]?.commit?.author?.date ?? lastCommitDate;
 
     // Sample recent commits to build the day/author/message distributions
     // used by the active-development heuristics. Bounded so huge repos stay
     // cheap - see COMMIT_SAMPLE_CAP.
     const sample: SampledCommit[] = [];
-    const pagesToFetch = Math.min(Math.ceil(commitCount / 100), COMMIT_SAMPLE_CAP / 100);
-    for (let page = 1; page <= Math.max(pagesToFetch, 1); page++) {
-      const resp = await withRetry(() =>
-        this.octokit.rest.repos.listCommits({
-          owner,
-          repo,
-          per_page: 100,
-          page
-        })
-      );
-      if (resp.data.length === 0) break;
+    for (const resp of pageResps) {
       for (const c of resp.data) {
         sample.push({
           date: c.commit?.author?.date ?? null,
@@ -84,7 +83,6 @@ export class GitHubClient {
           message: c.commit?.message ?? ""
         });
       }
-      if (resp.data.length < 100) break;
     }
 
     const { commitsByDay, distinctCommitDays, maxSingleDayCommitShare, authorStats, messageStats } =
