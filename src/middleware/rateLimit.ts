@@ -8,6 +8,22 @@ interface Window {
 export interface RateLimitOptions {
   windowMs: number;
   max: number;
+  // How many requests to handle between opportunistic sweeps of expired
+  // windows. Every distinct key (API key or IP) gets its own entry that
+  // otherwise only gets touched again if that same key makes another
+  // request, so without a sweep a public-facing instance's window map
+  // grows forever as new IPs show up. Configurable mainly so tests don't
+  // need thousands of requests to exercise it.
+  sweepEveryNRequests?: number;
+}
+
+const DEFAULT_SWEEP_EVERY_N_REQUESTS = 1000;
+
+/** Removes windows whose reset time has already passed. Exported for direct unit testing. */
+export function sweepExpiredWindows(windows: Map<string, Window>, now: number): void {
+  for (const [key, window] of windows) {
+    if (now >= window.resetAt) windows.delete(key);
+  }
 }
 
 /**
@@ -19,10 +35,18 @@ export interface RateLimitOptions {
  */
 export function rateLimit(options: RateLimitOptions): RequestHandler {
   const windows = new Map<string, Window>();
+  const sweepEveryNRequests = options.sweepEveryNRequests ?? DEFAULT_SWEEP_EVERY_N_REQUESTS;
+  let requestsSinceSweep = 0;
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const key = req.header("x-api-key") ?? req.ip ?? "unknown";
     const now = Date.now();
+
+    requestsSinceSweep++;
+    if (requestsSinceSweep >= sweepEveryNRequests) {
+      requestsSinceSweep = 0;
+      sweepExpiredWindows(windows, now);
+    }
 
     let window = windows.get(key);
     if (!window || now >= window.resetAt) {
