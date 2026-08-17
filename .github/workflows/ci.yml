@@ -22,3 +22,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # Fails the build on high/critical vulnerabilities in production
+      # dependencies specifically (not devDependencies, which pull in
+      # build-tool-only advisories - e.g. a vite/esbuild dev-server issue -
+      # that never ship or run in production).
+      - run: npm audit --omit=dev --audit-level=high
