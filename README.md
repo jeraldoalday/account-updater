@@ -90,7 +90,9 @@ emitted as structured JSON.
 eligibility pass/fail counts, cache hit/miss counts, and per-stage
 count/avg/max duration for each evaluation stage - clone+scan, commit
 history, push events - so a slow check is diagnosable by stage) —
-per-process only, not aggregated across instances.
+per-process only, not aggregated across instances. The same data is also
+available at `GET /metrics/prometheus` in Prometheus's text exposition
+format, for scraping directly instead of polling the JSON endpoint.
 
 `POST /eligibility/check`
 

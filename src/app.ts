@@ -9,6 +9,7 @@ import { rateLimit } from "./middleware/rateLimit";
 import { config } from "./config";
 import { version } from "./version";
 import { metrics } from "./metrics/metrics";
+import { toPrometheusText } from "./metrics/prometheusFormat";
 import { openApiSpec } from "./openapi";
 
 export function createApp() {
@@ -25,6 +26,13 @@ export function createApp() {
 
   app.get("/metrics", (_req, res) => {
     res.status(200).json(metrics.snapshot());
+  });
+
+  app.get("/metrics/prometheus", (_req, res) => {
+    res
+      .status(200)
+      .set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+      .send(toPrometheusText(metrics.snapshot()));
   });
 
   app.get("/openapi.json", (_req, res) => {

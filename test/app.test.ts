@@ -42,6 +42,13 @@ describe("app", () => {
     expect(typeof res.body.eligibilityChecksTotal).toBe("number");
   });
 
+  it("GET /metrics/prometheus returns counters in Prometheus text-exposition format", async () => {
+    const res = await request(createApp()).get("/metrics/prometheus");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/text\/plain/);
+    expect(res.text).toContain("account_updater_requests_total");
+  });
+
   it("GET /openapi.json returns a spec describing the eligibility endpoints", async () => {
     const res = await request(createApp()).get("/openapi.json");
     expect(res.status).toBe(200);

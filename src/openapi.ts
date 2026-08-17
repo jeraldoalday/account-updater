@@ -47,6 +47,18 @@ export const openApiSpec = {
         }
       }
     },
+    "/metrics/prometheus": {
+      get: {
+        summary: "Prometheus text-exposition-format view of the same counters as GET /metrics",
+        security: [],
+        responses: {
+          "200": {
+            description: "Current counters, in Prometheus's text exposition format.",
+            content: { "text/plain": { schema: { type: "string" } } }
+          }
+        }
+      }
+    },
     "/openapi.json": {
       get: {
         summary: "This spec",
