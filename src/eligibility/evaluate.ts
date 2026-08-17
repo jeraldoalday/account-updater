@@ -28,14 +28,37 @@ const resultCache = createCache<EligibilityResult>();
 const inFlight = new Map<string, Promise<EligibilityResult>>();
 const historyStore = createHistoryStore();
 
+async function timedStage<T>(stage: string, fn: () => Promise<T>): Promise<T> {
+  const start = process.hrtime.bigint();
+  const result = await fn();
+  const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+  metrics.recordStageDuration(stage, durationMs);
+  return result;
+}
+
 async function computeEligibility(ref: RepoRef, token: string | undefined): Promise<EligibilityResult> {
   const client = new GitHubClient(token);
+  const overallStart = process.hrtime.bigint();
 
   const [scan, history, pushEvents] = await Promise.all([
-    withShallowClone(ref, token, (dir) => scanSource(dir)),
-    client.getCommitHistorySummary(ref),
-    client.getPushEventSummary(ref)
+    timedStage("cloneAndScan", () => withShallowClone(ref, token, (dir) => scanSource(dir))),
+    timedStage("commitHistory", () => client.getCommitHistorySummary(ref)),
+    timedStage("pushEvents", () => client.getPushEventSummary(ref))
   ]);
+
+  // Diagnoses which stage a slow check spent its time in, since the three
+  // calls above run concurrently and a naive "total request time" figure
+  // alone can't tell you that apart (e.g. a huge repo's clone vs. a slow
+  // GitHub API response).
+  console.log(
+    JSON.stringify({
+      level: "info",
+      msg: "eligibility_check_timing",
+      repo: `${ref.owner}/${ref.repo}`,
+      totalMs: Number((Number(process.hrtime.bigint() - overallStart) / 1_000_000).toFixed(1)),
+      time: new Date().toISOString()
+    })
+  );
 
   const language = checkLanguage(scan);
   const size = checkSize(scan);

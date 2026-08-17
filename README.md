@@ -87,8 +87,10 @@ the caller sends it) for correlating a report with server logs, which are
 emitted as structured JSON.
 
 `GET /metrics` returns in-memory counters (request volume by status class,
-eligibility pass/fail counts, cache hit/miss counts) — per-process only, not
-aggregated across instances.
+eligibility pass/fail counts, cache hit/miss counts, and per-stage
+count/avg/max duration for each evaluation stage - clone+scan, commit
+history, push events - so a slow check is diagnosable by stage) —
+per-process only, not aggregated across instances.
 
 `POST /eligibility/check`
 

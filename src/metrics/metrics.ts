@@ -1,3 +1,9 @@
+export interface StageDurationStats {
+  count: number;
+  avgMs: number;
+  maxMs: number;
+}
+
 export interface MetricsSnapshot {
   requestsTotal: number;
   requestsByStatusClass: Record<string, number>;
@@ -6,6 +12,11 @@ export interface MetricsSnapshot {
   eligibilityFailed: number;
   cacheHits: number;
   cacheMisses: number;
+  // Per-stage timing of eligibility checks actually performed (a cache hit
+  // records nothing here, same as eligibilityChecksTotal), so a slow check
+  // is diagnosable by stage - e.g. is the clone slow, or the GitHub API -
+  // rather than only visible as one opaque total duration.
+  stageDurations: Record<string, StageDurationStats>;
 }
 
 /**
@@ -21,6 +32,7 @@ class Metrics {
   private eligibilityFailed = 0;
   private cacheHits = 0;
   private cacheMisses = 0;
+  private stageDurations: Record<string, { count: number; totalMs: number; maxMs: number }> = {};
 
   recordRequest(statusCode: number): void {
     this.requestsTotal++;
@@ -42,6 +54,14 @@ class Metrics {
     this.cacheMisses++;
   }
 
+  recordStageDuration(stage: string, durationMs: number): void {
+    const existing = this.stageDurations[stage] ?? { count: 0, totalMs: 0, maxMs: 0 };
+    existing.count++;
+    existing.totalMs += durationMs;
+    existing.maxMs = Math.max(existing.maxMs, durationMs);
+    this.stageDurations[stage] = existing;
+  }
+
   snapshot(): MetricsSnapshot {
     return {
       requestsTotal: this.requestsTotal,
@@ -50,7 +70,13 @@ class Metrics {
       eligibilityPassed: this.eligibilityPassed,
       eligibilityFailed: this.eligibilityFailed,
       cacheHits: this.cacheHits,
-      cacheMisses: this.cacheMisses
+      cacheMisses: this.cacheMisses,
+      stageDurations: Object.fromEntries(
+        Object.entries(this.stageDurations).map(([stage, s]) => [
+          stage,
+          { count: s.count, avgMs: Number((s.totalMs / s.count).toFixed(1)), maxMs: Number(s.maxMs.toFixed(1)) }
+        ])
+      )
     };
   }
 
@@ -62,6 +88,7 @@ class Metrics {
     this.eligibilityFailed = 0;
     this.cacheHits = 0;
     this.cacheMisses = 0;
+    this.stageDurations = {};
   }
 }
 

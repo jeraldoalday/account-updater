@@ -264,7 +264,18 @@ export const openApiSpec = {
           eligibilityPassed: { type: "number" },
           eligibilityFailed: { type: "number" },
           cacheHits: { type: "number" },
-          cacheMisses: { type: "number" }
+          cacheMisses: { type: "number" },
+          stageDurations: {
+            type: "object",
+            additionalProperties: {
+              type: "object",
+              properties: {
+                count: { type: "number" },
+                avgMs: { type: "number" },
+                maxMs: { type: "number" }
+              }
+            }
+          }
         }
       }
     }
