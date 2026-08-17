@@ -157,9 +157,12 @@ re-checking the repo independently.
 Every evaluation actually performed (a cache hit doesn't count again) is
 recorded to a SQLite audit trail — repo, timestamp, eligible, reasons — at
 `HISTORY_DB_PATH` (default `./data/history.db`), so a past result stays
-answerable later rather than only visible as a live snapshot. There's no
-read endpoint over it yet; it's queryable directly against the SQLite file
-for now.
+answerable later rather than only visible as a live snapshot.
+
+`GET /admin/evaluations` reads that audit trail back over the API (gated by
+the same `x-api-key` requirement as `/eligibility/*`, when `API_KEY` is
+set). Optional `?repo=owner/name` filters to one repo, and `?limit=` caps
+the result count (default 50, max 200). Results are most-recent-first.
 
 ## Known limitations
 

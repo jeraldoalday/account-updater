@@ -1,5 +1,6 @@
 import express from "express";
 import { eligibilityRouter } from "./routes/eligibility.route";
+import { adminRouter } from "./routes/admin.route";
 import { requestId } from "./middleware/requestId";
 import { requestLogger } from "./middleware/requestLogger";
 import { errorHandler } from "./middleware/errorHandler";
@@ -36,6 +37,8 @@ export function createApp() {
     apiKeyAuth(config.apiKey),
     eligibilityRouter
   );
+
+  app.use("/admin", apiKeyAuth(config.apiKey), adminRouter);
 
   app.use(errorHandler);
 

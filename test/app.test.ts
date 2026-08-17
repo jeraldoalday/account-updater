@@ -2,17 +2,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
 const evaluateEligibility = vi.fn();
+const listRecent = vi.fn();
+const listForRepo = vi.fn();
 
 vi.mock("../src/eligibility/evaluate", () => ({
   evaluateEligibility: (...args: unknown[]) => evaluateEligibility(...args)
 }));
 
-// Imported after the mock so the route picks up the mocked module.
+vi.mock("../src/history/createHistoryStore", () => ({
+  createHistoryStore: () => ({
+    listRecent: (...args: unknown[]) => listRecent(...args),
+    listForRepo: (...args: unknown[]) => listForRepo(...args),
+    record: vi.fn()
+  })
+}));
+
+// Imported after the mocks so the routes pick up the mocked modules.
 const { createApp } = await import("../src/app");
 
 describe("app", () => {
   beforeEach(() => {
     evaluateEligibility.mockReset();
+    listRecent.mockReset();
+    listForRepo.mockReset();
   });
 
   it("GET /health returns ok with version and uptime", async () => {
@@ -173,6 +185,49 @@ describe("app", () => {
       expect(res.status).toBe(200);
       expect(res.body.results[0].error).toBeTruthy();
       expect(res.body.results[1].eligible).toBe(true);
+    });
+  });
+
+  describe("GET /admin/evaluations", () => {
+    it("lists recent evaluations across all repos by default", async () => {
+      const record = { id: 1, repo: { owner: "o", repo: "r" }, evaluatedAt: "2026-01-01T00:00:00Z", eligible: true, reasons: [] };
+      listRecent.mockReturnValue([record]);
+
+      const res = await request(createApp()).get("/admin/evaluations");
+
+      expect(res.status).toBe(200);
+      expect(res.body.evaluations).toEqual([record]);
+      expect(listRecent).toHaveBeenCalledWith(50);
+      expect(listForRepo).not.toHaveBeenCalled();
+    });
+
+    it("filters to one repo when ?repo= is given", async () => {
+      listForRepo.mockReturnValue([]);
+
+      const res = await request(createApp()).get("/admin/evaluations").query({ repo: "o/r" });
+
+      expect(res.status).toBe(200);
+      expect(listForRepo).toHaveBeenCalledWith({ owner: "o", repo: "r" }, 50);
+    });
+
+    it("respects a custom limit", async () => {
+      listRecent.mockReturnValue([]);
+
+      await request(createApp()).get("/admin/evaluations").query({ limit: "5" });
+
+      expect(listRecent).toHaveBeenCalledWith(5);
+    });
+
+    it("rejects a limit over the 200 cap", async () => {
+      const res = await request(createApp()).get("/admin/evaluations").query({ limit: "500" });
+      expect(res.status).toBe(400);
+      expect(listRecent).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unparseable repo query param", async () => {
+      const res = await request(createApp()).get("/admin/evaluations").query({ repo: "not a repo" });
+      expect(res.status).toBe(400);
+      expect(listForRepo).not.toHaveBeenCalled();
     });
   });
 });

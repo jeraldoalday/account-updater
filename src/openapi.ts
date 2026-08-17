@@ -124,6 +124,50 @@ export const openApiSpec = {
           "429": { description: "Rate limit exceeded." }
         }
       }
+    },
+    "/admin/evaluations": {
+      get: {
+        summary: "Read-only view of the evaluation audit trail",
+        description:
+          "Lists past evaluations from the SQLite audit trail, most recent first. " +
+          "Filter to one repo with `repo`, and cap the result count with `limit` " +
+          "(default 50, max 200).",
+        parameters: [
+          {
+            name: "repo",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description: '"owner/name" - when omitted, lists the most recent evaluations across all repos.'
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 200 }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Matching evaluations, most recent first.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    evaluations: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/EvaluationRecord" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { description: "Invalid `repo` or `limit` query parameter." },
+          "401": { description: "Missing or invalid API key (only when API_KEY is configured)." }
+        }
+      }
     }
   },
   components: {
@@ -276,6 +320,19 @@ export const openApiSpec = {
               }
             }
           }
+        }
+      },
+      EvaluationRecord: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          repo: {
+            type: "object",
+            properties: { owner: { type: "string" }, repo: { type: "string" } }
+          },
+          evaluatedAt: { type: "string", format: "date-time" },
+          eligible: { type: "boolean" },
+          reasons: { type: "array", items: { type: "string" } }
         }
       }
     }
