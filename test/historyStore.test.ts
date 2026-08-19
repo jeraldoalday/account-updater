@@ -21,6 +21,17 @@ describe("HistoryStore", () => {
     store = new HistoryStore(openHistoryDb(":memory:"));
   });
 
+  it("ping() succeeds on an empty but well-formed database", () => {
+    // The readiness probe must not require any evaluation to have happened
+    // yet - a freshly deployed instance is ready, not degraded.
+    expect(() => store.ping()).not.toThrow();
+  });
+
+  it("ping() throws when the evaluations table is missing", () => {
+    const emptyDb = new Database(":memory:");
+    expect(() => new HistoryStore(emptyDb).ping()).toThrow(/evaluations/);
+  });
+
   it("records an evaluation and lists it back for the repo", () => {
     store.record(fakeResult({ repo: { provider: "github", owner: "acme", repo: "widgets" } }));
 

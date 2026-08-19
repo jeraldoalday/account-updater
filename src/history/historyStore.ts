@@ -61,6 +61,16 @@ export class HistoryStore {
       );
   }
 
+  /**
+   * Cheapest query that still proves the database file is open and the
+   * table exists - a readiness probe should fail on a corrupt or missing
+   * audit-trail database rather than only discovering it on the first
+   * evaluation, where the write is deliberately best-effort.
+   */
+  ping(): void {
+    this.db.prepare(`SELECT id FROM evaluations LIMIT 1`).get();
+  }
+
   listForRepo(ref: RepoRef, limit = 20): EvaluationRecord[] {
     const rows = this.db
       .prepare(

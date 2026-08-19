@@ -32,6 +32,13 @@ class FakeRedisClient implements RedisLikeClient {
   }
 }
 
+/** A client that fails the way an unreachable Redis does. */
+class UnreachableRedisClient extends FakeRedisClient {
+  async connect(): Promise<void> {
+    throw new Error("connect ECONNREFUSED 127.0.0.1:6379");
+  }
+}
+
 describe("RedisCache", () => {
   let client: FakeRedisClient;
 
@@ -54,6 +61,33 @@ describe("RedisCache", () => {
     const cache = new RedisCache<number>(client, 5000);
     await cache.set("a", 1);
     expect(client.lastSetOptions).toEqual({ PX: 5000 });
+  });
+
+  it("round-trips a PING so readiness reports on the connection itself", async () => {
+    let pings = 0;
+    const pingable = Object.assign(client, {
+      ping: async () => {
+        pings++;
+        return "PONG";
+      }
+    });
+
+    await new RedisCache<number>(pingable, 1000).ping();
+
+    expect(pings).toBe(1);
+    expect(client.connectCalls).toBe(1);
+  });
+
+  it("treats a client without PING as reachable once connected", async () => {
+    // The fake has no ping(); a real client always does, but the readiness
+    // probe must not report an outage just because a client lacks it.
+    await expect(new RedisCache<number>(client, 1000).ping()).resolves.toBeUndefined();
+    expect(client.isOpen).toBe(true);
+  });
+
+  it("rejects from ping() when the connection can't be established", async () => {
+    const cache = new RedisCache<number>(new UnreachableRedisClient(), 1000);
+    await expect(cache.ping()).rejects.toThrow("ECONNREFUSED");
   });
 
   it("namespaces keys so different cache instances don't collide", async () => {

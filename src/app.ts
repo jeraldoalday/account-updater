@@ -11,6 +11,7 @@ import { version } from "./version";
 import { metrics } from "./metrics/metrics";
 import { toPrometheusText } from "./metrics/prometheusFormat";
 import { openApiSpec } from "./openapi";
+import { checkReadiness } from "./health/readiness";
 
 export function createApp() {
   const app = express();
@@ -22,6 +23,19 @@ export function createApp() {
 
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok", version, uptimeSeconds: Math.round(process.uptime()) });
+  });
+
+  // Liveness (above) answers "restart me?"; readiness answers "send me
+  // traffic?" - the dependencies below can be down while the process is
+  // perfectly alive, and both failures are non-fatal per request by
+  // design, so nothing else would surface them.
+  app.get("/ready", async (_req, res, next) => {
+    try {
+      const report = await checkReadiness();
+      res.status(report.ready ? 200 : 503).json(report);
+    } catch (err) {
+      next(err);
+    }
   });
 
   app.get("/metrics", (_req, res) => {

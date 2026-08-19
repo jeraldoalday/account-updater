@@ -55,6 +55,28 @@
       ]
     },
     {
+      "name": "ready",
+      "item": [
+        {
+          "name": "Readiness check: are this instance's dependencies usable?",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            },
+            "description": "Distinct from /health, which only reports that the process is alive. Returns 503 when the cache backend or the SQLite audit trail is unreachable - both are non-fatal per request by design (a cache error degrades to a miss, an audit write failure is swallowed), so a load balancer has no other way to see them."
+          }
+        }
+      ]
+    },
+    {
       "name": "metrics",
       "item": [
         {

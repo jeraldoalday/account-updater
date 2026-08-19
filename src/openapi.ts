@@ -39,6 +39,31 @@ export const openApiSpec = {
         }
       }
     },
+    "/ready": {
+      get: {
+        summary: "Readiness check: are this instance's dependencies usable?",
+        description:
+          "Distinct from /health, which only reports that the process is alive. Returns " +
+          "503 when the cache backend or the SQLite audit trail is unreachable - both are " +
+          "non-fatal per request by design (a cache error degrades to a miss, an audit " +
+          "write failure is swallowed), so a load balancer has no other way to see them.",
+        security: [],
+        responses: {
+          "200": {
+            description: "All dependencies are usable.",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/ReadinessReport" } }
+            }
+          },
+          "503": {
+            description: "At least one dependency is unusable; see `checks` for which.",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/ReadinessReport" } }
+            }
+          }
+        }
+      }
+    },
     "/metrics": {
       get: {
         summary: "In-memory operational counters for this process",
@@ -335,6 +360,29 @@ export const openApiSpec = {
         properties: {
           error: { type: "string" },
           rateLimit: { $ref: "#/components/schemas/RateLimitInfo" }
+        }
+      },
+      DependencyStatus: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          error: {
+            type: "string",
+            description: "Why the dependency check failed. Absent when `ok` is true."
+          }
+        }
+      },
+      ReadinessReport: {
+        type: "object",
+        properties: {
+          ready: { type: "boolean" },
+          checks: {
+            type: "object",
+            properties: {
+              cache: { $ref: "#/components/schemas/DependencyStatus" },
+              history: { $ref: "#/components/schemas/DependencyStatus" }
+            }
+          }
         }
       },
       Metrics: {

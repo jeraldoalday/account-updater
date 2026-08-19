@@ -10,6 +10,7 @@ export interface RedisLikeClient {
   isOpen?: boolean;
   connect?(): Promise<unknown>;
   get(key: string): Promise<string | null>;
+  ping?(): Promise<unknown>;
   set(key: string, value: string, options: { PX: number }): Promise<unknown>;
   keys(pattern: string): Promise<string[]>;
   del(keys: string[]): Promise<unknown>;
@@ -49,6 +50,16 @@ export class RedisCache<V> implements Cache<V> {
   async set(key: string, value: V): Promise<void> {
     await this.ensureConnected();
     await this.client.set(this.namespacedKey(key), JSON.stringify(value), { PX: this.ttlMs });
+  }
+
+  /**
+   * Round-trips a PING so the readiness probe reports on the connection
+   * itself rather than on whether a key happens to be cached. A client
+   * without PING (a test fake) is treated as reachable once connected.
+   */
+  async ping(): Promise<void> {
+    await this.ensureConnected();
+    if (this.client.ping) await this.client.ping();
   }
 
   async clear(): Promise<void> {

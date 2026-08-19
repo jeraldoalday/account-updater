@@ -29,6 +29,10 @@ describe("TtlCache", () => {
     expect(await cache.get("a")).toBeUndefined();
   });
 
+  it("ping() resolves, since the store is this process's own memory", async () => {
+    await expect(new TtlCache<number>(1000).ping()).resolves.toBeUndefined();
+  });
+
   it("clear() removes all entries", async () => {
     const cache = new TtlCache<number>(1000);
     await cache.set("a", 1);

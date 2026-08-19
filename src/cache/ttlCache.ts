@@ -49,6 +49,9 @@ export class TtlCache<V> implements Cache<V> {
     }
   }
 
+  /** Always reachable: the store is this process's own memory. */
+  async ping(): Promise<void> {}
+
   async clear(): Promise<void> {
     this.store.clear();
   }
