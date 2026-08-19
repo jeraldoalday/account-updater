@@ -15,7 +15,11 @@ declare global {
  * present, so a request can be traced across services; otherwise generates
  * one. Always echoed back on the response for the caller to log/report.
  */
-export const requestId: RequestHandler = (req: Request, res: Response, next: NextFunction): void => {
+export const requestId: RequestHandler = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   req.id = req.header("x-request-id") || randomUUID();
   res.setHeader("x-request-id", req.id);
   next();

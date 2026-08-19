@@ -42,8 +42,15 @@ describe("extractRateLimitInfo", () => {
   });
 
   it("returns an object with undefined fields when headers are missing", () => {
-    const err = Object.assign(new Error("rate limited"), { status: 403, response: { headers: {} } });
+    const err = Object.assign(new Error("rate limited"), {
+      status: 403,
+      response: { headers: {} }
+    });
     const info = extractRateLimitInfo(err);
-    expect(info).toEqual({ remaining: undefined, resetAt: undefined, retryAfterSeconds: undefined });
+    expect(info).toEqual({
+      remaining: undefined,
+      resetAt: undefined,
+      retryAfterSeconds: undefined
+    });
   });
 });

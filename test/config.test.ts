@@ -80,17 +80,22 @@ describe("config", () => {
   });
 
   it("throws when CACHE_BACKEND=redis but REDIS_URL is unset", async () => {
-    await expect(loadConfigWith({ CACHE_BACKEND: "redis" })).rejects.toThrow(/Invalid configuration/);
+    await expect(loadConfigWith({ CACHE_BACKEND: "redis" })).rejects.toThrow(
+      /Invalid configuration/
+    );
   });
 
   it("throws for an unrecognized CACHE_BACKEND value", async () => {
-    await expect(loadConfigWith({ CACHE_BACKEND: "memcached" })).rejects.toThrow(/Invalid configuration/);
+    await expect(loadConfigWith({ CACHE_BACKEND: "memcached" })).rejects.toThrow(
+      /Invalid configuration/
+    );
   });
 
   it("builds githubAppAuthConfig and unescapes literal \\n sequences in the private key when all three GitHub App vars are set", async () => {
     const { config } = await loadConfigWith({
       GITHUB_APP_ID: "12345",
-      GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\\nfake\\n-----END RSA PRIVATE KEY-----",
+      GITHUB_APP_PRIVATE_KEY:
+        "-----BEGIN RSA PRIVATE KEY-----\\nfake\\n-----END RSA PRIVATE KEY-----",
       GITHUB_APP_INSTALLATION_ID: "67890"
     });
     expect(config.githubAppAuthConfig).toEqual({
@@ -101,7 +106,9 @@ describe("config", () => {
   });
 
   it("throws when only some of the GitHub App auth vars are set", async () => {
-    await expect(loadConfigWith({ GITHUB_APP_ID: "12345" })).rejects.toThrow(/Invalid configuration/);
+    await expect(loadConfigWith({ GITHUB_APP_ID: "12345" })).rejects.toThrow(
+      /Invalid configuration/
+    );
     await expect(
       loadConfigWith({ GITHUB_APP_ID: "12345", GITHUB_APP_PRIVATE_KEY: "key" })
     ).rejects.toThrow(/must all be set together/);

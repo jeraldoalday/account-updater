@@ -145,7 +145,10 @@ describe("checkActiveDevelopment", () => {
   });
 
   it("still fails a near-total single-push dump even with otherwise strong signals", () => {
-    const result = checkActiveDevelopment(history(), pushEvents({ maxSinglePushCommitShare: 0.95 }));
+    const result = checkActiveDevelopment(
+      history(),
+      pushEvents({ maxSinglePushCommitShare: 0.95 })
+    );
     expect(result.passed).toBe(false);
   });
 });

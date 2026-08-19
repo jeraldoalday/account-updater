@@ -48,7 +48,9 @@ describe("createHistoryStore", () => {
       reasons: ["nope"]
     });
 
-    expect(createHistoryStore().listForRepo({ provider: "github", owner: "o", repo: "r" })).toHaveLength(1);
+    expect(
+      createHistoryStore().listForRepo({ provider: "github", owner: "o", repo: "r" })
+    ).toHaveLength(1);
   });
 
   describe("closeHistoryStore", () => {
@@ -58,7 +60,8 @@ describe("createHistoryStore", () => {
     });
 
     it("closes the connection so a later createHistoryStore() call reopens it", async () => {
-      const { createHistoryStore, closeHistoryStore } = await loadCreateHistoryStoreWith("history.db");
+      const { createHistoryStore, closeHistoryStore } =
+        await loadCreateHistoryStoreWith("history.db");
 
       createHistoryStore().record({
         eligible: true,

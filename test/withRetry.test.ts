@@ -14,10 +14,7 @@ describe("withRetry", () => {
   });
 
   it("retries on a 5xx error and eventually succeeds", async () => {
-    const fn = vi
-      .fn()
-      .mockRejectedValueOnce(errorWithStatus(503))
-      .mockResolvedValueOnce("ok");
+    const fn = vi.fn().mockRejectedValueOnce(errorWithStatus(503)).mockResolvedValueOnce("ok");
     const result = await withRetry(fn, { retries: 3, baseDelayMs: 1 });
     expect(result).toBe("ok");
     expect(fn).toHaveBeenCalledTimes(2);

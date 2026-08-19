@@ -24,7 +24,11 @@ const configSchema = z
     // When set, callers must send a matching `x-api-key` header. Unset by
     // default so local development doesn't require one.
     apiKey: z.string().optional(),
-    cacheTtlMs: z.coerce.number().int().positive().default(10 * 60 * 1000),
+    cacheTtlMs: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 60 * 1000),
     // "memory" (default) is per-process only. "redis" shares cached
     // eligibility results across instances of the service.
     cacheBackend: z.enum(["memory", "redis"]).default("memory"),
@@ -35,7 +39,11 @@ const configSchema = z
     historyDbPath: z.string().default("./data/history.db"),
     // Applies to /eligibility, the endpoint that clones a repo and calls the
     // GitHub API, so it's the one worth protecting from abuse.
-    rateLimitWindowMs: z.coerce.number().int().positive().default(60 * 1000),
+    rateLimitWindowMs: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60 * 1000),
     rateLimitMax: z.coerce.number().int().positive().default(20)
   })
   .refine((data) => data.cacheBackend !== "redis" || data.redisUrl !== undefined, {

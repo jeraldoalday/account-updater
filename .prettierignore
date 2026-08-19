@@ -1,3 +1,7 @@
 dist/
 node_modules/
 coverage/
+
+# Generated from the OpenAPI spec by `npm run collection` — its exact bytes
+# are asserted by a test, so reformatting it would break that check.
+docs/postman_collection.json

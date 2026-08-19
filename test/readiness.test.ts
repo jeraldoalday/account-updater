@@ -39,7 +39,10 @@ describe("checkReadiness", () => {
 
     const report = await checkReadiness();
     expect(report.ready).toBe(false);
-    expect(report.checks.cache).toEqual({ ok: false, error: "connect ECONNREFUSED 127.0.0.1:6379" });
+    expect(report.checks.cache).toEqual({
+      ok: false,
+      error: "connect ECONNREFUSED 127.0.0.1:6379"
+    });
     // One dependency failing must not hide the other's status.
     expect(report.checks.history.ok).toBe(true);
   });

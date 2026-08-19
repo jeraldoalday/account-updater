@@ -8,8 +8,7 @@ interface BodyParserSyntaxError extends SyntaxError {
 
 function isMalformedJsonError(err: unknown): err is BodyParserSyntaxError {
   return (
-    err instanceof SyntaxError &&
-    (err as BodyParserSyntaxError).type === "entity.parse.failed"
+    err instanceof SyntaxError && (err as BodyParserSyntaxError).type === "entity.parse.failed"
   );
 }
 

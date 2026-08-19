@@ -32,6 +32,8 @@ describe("ALLOWED_LANGUAGES", () => {
   });
 
   it("throws on an unrecognized language name", async () => {
-    await expect(loadThresholdsWith("TypeScript,COBOL")).rejects.toThrow(/unknown language.*COBOL/i);
+    await expect(loadThresholdsWith("TypeScript,COBOL")).rejects.toThrow(
+      /unknown language.*COBOL/i
+    );
   });
 });

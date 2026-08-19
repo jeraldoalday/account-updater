@@ -55,12 +55,7 @@ describe("summarizeCommitMessages", () => {
   });
 
   it("treats repeated identical messages as low diversity even if descriptive", () => {
-    const stats = summarizeCommitMessages([
-      "Sync data",
-      "Sync data",
-      "Sync data",
-      "Sync data"
-    ]);
+    const stats = summarizeCommitMessages(["Sync data", "Sync data", "Sync data", "Sync data"]);
     expect(stats.distinctMessageRatio).toBe(0.25);
     expect(stats.genericMessageShare).toBe(0);
   });
