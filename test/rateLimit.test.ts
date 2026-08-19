@@ -10,6 +10,56 @@ function appWith(windowMs: number, max: number, sweepEveryNRequests?: number) {
   return app;
 }
 
+function appWithTrustedKey(windowMs: number, max: number, trustedApiKey: string) {
+  const app = express();
+  app.use(rateLimit({ windowMs, max, trustedApiKey }));
+  app.get("/ping", (_req, res) => res.status(200).json({ ok: true }));
+  return app;
+}
+
+describe("rateLimit bucket selection", () => {
+  it("does not let an unrecognized x-api-key mint a fresh bucket per request", async () => {
+    // The bypass this exists to prevent: rotate the header and every
+    // request looks like the first one in a new window. It ran before
+    // apiKeyAuth, so no valid credential was needed to do it.
+    const app = appWithTrustedKey(60_000, 2, "real-key");
+
+    expect((await request(app).get("/ping").set("x-api-key", "guess-1")).status).toBe(200);
+    expect((await request(app).get("/ping").set("x-api-key", "guess-2")).status).toBe(200);
+    expect((await request(app).get("/ping").set("x-api-key", "guess-3")).status).toBe(429);
+  });
+
+  it("ignores the header entirely when no API key is configured", async () => {
+    // With auth disabled the header is just caller-supplied text, so it
+    // must not influence bucketing at all.
+    const app = appWith(60_000, 2);
+
+    expect((await request(app).get("/ping").set("x-api-key", "a")).status).toBe(200);
+    expect((await request(app).get("/ping").set("x-api-key", "b")).status).toBe(200);
+    expect((await request(app).get("/ping").set("x-api-key", "c")).status).toBe(429);
+  });
+
+  it("gives a caller presenting the configured key its own budget", async () => {
+    // The legitimate case the per-key bucket exists for: a keyed caller
+    // isn't throttled by unrelated traffic from the same address.
+    const app = appWithTrustedKey(60_000, 2, "real-key");
+
+    await request(app).get("/ping");
+    await request(app).get("/ping");
+    expect((await request(app).get("/ping")).status).toBe(429);
+
+    expect((await request(app).get("/ping").set("x-api-key", "real-key")).status).toBe(200);
+  });
+
+  it("counts requests with a wrong key against the caller's address, not their guess", async () => {
+    const app = appWithTrustedKey(60_000, 2, "real-key");
+
+    await request(app).get("/ping").set("x-api-key", "wrong");
+    await request(app).get("/ping");
+    expect((await request(app).get("/ping").set("x-api-key", "also-wrong")).status).toBe(429);
+  });
+});
+
 describe("rateLimit", () => {
   it("allows requests under the limit", async () => {
     const app = appWith(60_000, 3);
@@ -29,15 +79,16 @@ describe("rateLimit", () => {
     expect(res.headers["retry-after"]).toBeDefined();
   });
 
-  it("tracks separate callers independently by x-api-key", async () => {
-    const app = appWith(60_000, 1);
-    const first = await request(app).get("/ping").set("x-api-key", "caller-a");
-    const second = await request(app).get("/ping").set("x-api-key", "caller-b");
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
+  it("keeps the keyed caller's budget separate from anonymous traffic", async () => {
+    // Previously this asserted that *any* two x-api-key values got
+    // separate budgets, which is what made the limiter bypassable. The
+    // real requirement is narrower: a caller presenting the configured key
+    // has one budget, and exhausting it doesn't consume anyone else's.
+    const app = appWithTrustedKey(60_000, 1, "real-key");
 
-    const blocked = await request(app).get("/ping").set("x-api-key", "caller-a");
-    expect(blocked.status).toBe(429);
+    expect((await request(app).get("/ping").set("x-api-key", "real-key")).status).toBe(200);
+    expect((await request(app).get("/ping").set("x-api-key", "real-key")).status).toBe(429);
+    expect((await request(app).get("/ping")).status).toBe(200);
   });
 
   it("resets the count after the window elapses", async () => {

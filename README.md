@@ -86,9 +86,12 @@ If `API_KEY` is set, every `/eligibility/*` request must include a matching
 local development.
 
 `/eligibility/*` is also rate-limited (20 requests per 60-second window by
-default, keyed by API key or IP — see `RATE_LIMIT_WINDOW_MS` /
-`RATE_LIMIT_MAX`), since each request clones a repo and calls the GitHub
-API. Requests over the limit get a 429 with a `Retry-After` header.
+default — see `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`), since each
+request clones a repo and calls the GitHub API. Requests over the limit
+get a 429 with a `Retry-After` header. A caller presenting the configured
+`API_KEY` gets its own budget; everyone else is limited per remote IP. An
+`x-api-key` header that doesn't match the configured key is ignored for
+bucketing, so a caller can't rotate the header to escape the limit.
 
 Every response carries an `x-request-id` header (reusing an incoming one if
 the caller sends it) for correlating a report with server logs, which are

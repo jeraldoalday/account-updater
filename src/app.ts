@@ -55,7 +55,11 @@ export function createApp() {
 
   app.use(
     "/eligibility",
-    rateLimit({ windowMs: config.rateLimitWindowMs, max: config.rateLimitMax }),
+    rateLimit({
+      windowMs: config.rateLimitWindowMs,
+      max: config.rateLimitMax,
+      trustedApiKey: config.apiKey
+    }),
     apiKeyAuth(config.apiKey),
     eligibilityRouter
   );

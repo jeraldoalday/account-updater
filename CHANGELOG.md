@@ -80,3 +80,7 @@ unreleased.
   request, and is counted (`cacheErrors`) and reported by `GET /ready`.
 - Clone failures are scrubbed of any token before the error reaches a log
   line or response.
+- The rate limiter no longer buckets by the raw `x-api-key` header, which
+  let any caller escape the limit by sending a different value on each
+  request. Only a header matching the configured `API_KEY` selects a
+  per-key budget; everything else is limited per remote IP.
