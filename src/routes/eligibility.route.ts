@@ -3,6 +3,8 @@ import { z } from "zod";
 import { parseRepoRef } from "../utils/repoUrl";
 import { evaluateEligibility } from "../eligibility/evaluate";
 import { extractRateLimitInfo, type RateLimitInfo } from "../github/rateLimitInfo";
+import { UnsupportedProviderError } from "../providers/provider";
+import { describeRef } from "../providers/hosts";
 import { mapWithConcurrency } from "../utils/concurrency";
 import { config } from "../config";
 import type { EligibilityResult, RepoRef } from "../types";
@@ -16,9 +18,7 @@ const MAX_BATCH_SIZE = 20;
 const BATCH_CONCURRENCY = 3;
 
 const requestSchema = z.object({
-  repo: z
-    .string({ required_error: REPO_REQUIRED_MESSAGE })
-    .min(1, REPO_REQUIRED_MESSAGE),
+  repo: z.string({ required_error: REPO_REQUIRED_MESSAGE }).min(1, REPO_REQUIRED_MESSAGE),
   // Optional per-request token, e.g. the connecting user's own GitHub OAuth
   // token, so private repos can be evaluated without a shared server token.
   token: z.string().optional()
@@ -45,12 +45,19 @@ async function tryEvaluate(
     const result = await evaluateEligibility(ref, token, { cacheable });
     return { ok: true, result };
   } catch (err) {
+    // A forge this service can name but not evaluate is a problem with the
+    // request, not with an upstream - answer 400 rather than 502 so the
+    // caller doesn't retry something that can never succeed.
+    if (err instanceof UnsupportedProviderError) {
+      return { ok: false, status: 400, error: (err as Error).message };
+    }
+
     const rateLimit = extractRateLimitInfo(err);
     if (rateLimit) {
       return {
         ok: false,
         status: 503,
-        error: `GitHub API rate limit hit while evaluating ${ref.owner}/${ref.repo}. Try again later.`,
+        error: `GitHub API rate limit hit while evaluating ${describeRef(ref)}. Try again later.`,
         rateLimit
       };
     }
@@ -58,7 +65,7 @@ async function tryEvaluate(
     return {
       ok: false,
       status: 502,
-      error: `Could not evaluate ${ref.owner}/${ref.repo}: ${(err as Error).message}`
+      error: `Could not evaluate ${describeRef(ref)}: ${(err as Error).message}`
     };
   }
 }
@@ -110,25 +117,29 @@ eligibilityRouter.post("/check-batch", async (req, res) => {
   const token = parsed.data.token ?? config.githubToken;
   const cacheable = !parsed.data.token;
 
-  const results = await mapWithConcurrency(parsed.data.repos, BATCH_CONCURRENCY, async (repoInput) => {
-    let ref: RepoRef;
-    try {
-      ref = parseRepoRef(repoInput);
-    } catch (err) {
-      return { repo: repoInput, error: (err as Error).message };
-    }
+  const results = await mapWithConcurrency(
+    parsed.data.repos,
+    BATCH_CONCURRENCY,
+    async (repoInput) => {
+      let ref: RepoRef;
+      try {
+        ref = parseRepoRef(repoInput);
+      } catch (err) {
+        return { repo: repoInput, error: (err as Error).message };
+      }
 
-    const outcome = await tryEvaluate(ref, token, cacheable);
-    if (!outcome.ok) {
-      return {
-        repo: `${ref.owner}/${ref.repo}`,
-        error: outcome.error,
-        ...(outcome.rateLimit ? { rateLimit: outcome.rateLimit } : {})
-      };
-    }
+      const outcome = await tryEvaluate(ref, token, cacheable);
+      if (!outcome.ok) {
+        return {
+          repo: describeRef(ref),
+          error: outcome.error,
+          ...(outcome.rateLimit ? { rateLimit: outcome.rateLimit } : {})
+        };
+      }
 
-    return outcome.result;
-  });
+      return outcome.result;
+    }
+  );
 
   res.status(200).json({ results });
 });

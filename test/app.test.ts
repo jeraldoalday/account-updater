@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
+import { UnsupportedProviderError } from "../src/providers/provider";
 
 const evaluateEligibility = vi.fn();
 const listRecent = vi.fn();
@@ -104,6 +105,37 @@ describe("app", () => {
     );
   });
 
+  it("POST /eligibility/check returns 400, not 502, for a forge with no implementation", async () => {
+    // The request is well-formed and the URL parses - it just names a
+    // provider that can't be evaluated. Retrying will never help, so this
+    // must not look like a transient upstream failure.
+    evaluateEligibility.mockRejectedValue(new UnsupportedProviderError("gitlab", ["github"]));
+
+    const res = await request(createApp())
+      .post("/eligibility/check")
+      .send({ repo: "https://gitlab.com/o/r" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/GitLab repositories are not supported yet/);
+  });
+
+  it("passes the parsed provider through to the evaluator", async () => {
+    evaluateEligibility.mockResolvedValue({
+      eligible: true,
+      repo: { provider: "gitlab", owner: "o", repo: "r" },
+      checks: {},
+      reasons: []
+    });
+
+    await request(createApp()).post("/eligibility/check").send({ repo: "https://gitlab.com/o/r" });
+
+    expect(evaluateEligibility).toHaveBeenCalledWith(
+      { provider: "gitlab", owner: "o", repo: "r" },
+      undefined,
+      { cacheable: true }
+    );
+  });
+
   it("POST /eligibility/check returns 502 when evaluation fails", async () => {
     evaluateEligibility.mockRejectedValue(new Error("boom"));
 
@@ -185,6 +217,26 @@ describe("app", () => {
       expect(res.status).toBe(200);
       expect(res.body.results[0].eligible).toBe(true);
       expect(res.body.results[1].error).toMatch(/clone failed/);
+    });
+
+    it("reports an unsupported provider per-entry without failing the whole batch", async () => {
+      evaluateEligibility.mockImplementation(async (ref: { provider: string; repo: string }) => {
+        if (ref.provider !== "github") {
+          throw new UnsupportedProviderError("gitlab", ["github"]);
+        }
+        return { eligible: true, repo: ref, checks: {}, reasons: [] };
+      });
+
+      const res = await request(createApp())
+        .post("/eligibility/check-batch")
+        .send({ repos: ["o/good", "https://gitlab.com/o/other"] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results[0].eligible).toBe(true);
+      expect(res.body.results[1].error).toMatch(/not supported yet/);
+      // Batch entries are identified by host too, so two same-named repos
+      // on different forges are distinguishable in the response.
+      expect(res.body.results[1].repo).toBe("gitlab.com/o/other");
     });
 
     it("reports an unparseable repo entry without aborting the rest of the batch", async () => {
