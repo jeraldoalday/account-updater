@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # Twelve dependencies were out of date - several by whole major versions
+  # - before anything was watching for it. CI already fails on a high or
+  # critical advisory in production dependencies (`npm audit --omit=dev`),
+  # but that only catches the vulnerable ones, and only once they're
+  # published as advisories.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # In-range updates land as one reviewable PR: individually they're
+      # noise, and CI (typecheck, lint, format, tests, build, audit) is the
+      # real signal on whether they're safe.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # Majors arrive as their own PRs - express 5, zod 4 and friends are
+    # migrations to schedule, not upgrades to merge on a Monday.
+    commit-message:
+      prefix: "Update"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "Update"

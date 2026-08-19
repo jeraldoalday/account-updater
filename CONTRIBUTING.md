@@ -77,6 +77,11 @@ same commit are hard to review and harder to revert.
 table in both directions, so an undocumented route fails the build — and
 regenerating the collection with `npm run collection`.
 
+Dependency updates arrive as Dependabot PRs: in-range minor and patch
+bumps grouped into one, majors individually. CI is the real signal on
+whether a grouped bump is safe; a major is a migration to schedule, not
+something to merge on a Monday.
+
 ## Commit messages
 
 Subject line: imperative, sentence case, no type prefix, no trailing
