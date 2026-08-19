@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { DEFAULT_PROVIDER_ID, type ProviderId } from "../providers/hosts";
 import type { EligibilityResult, RepoRef } from "../types";
 
 export interface EvaluationRecord {
@@ -11,6 +12,7 @@ export interface EvaluationRecord {
 
 interface EvaluationRow {
   id: number;
+  provider: string;
   owner: string;
   repo: string;
   evaluated_at: string;
@@ -21,7 +23,13 @@ interface EvaluationRow {
 function toRecord(row: EvaluationRow): EvaluationRecord {
   return {
     id: row.id,
-    repo: { owner: row.owner, repo: row.repo },
+    // Rows predating the provider column are backfilled to the default by
+    // the migration, so this coalesce only covers a hand-edited database.
+    repo: {
+      provider: (row.provider ?? DEFAULT_PROVIDER_ID) as ProviderId,
+      owner: row.owner,
+      repo: row.repo
+    },
     evaluatedAt: row.evaluated_at,
     eligible: row.eligible === 1,
     reasons: JSON.parse(row.reasons) as string[]
@@ -40,10 +48,11 @@ export class HistoryStore {
   record(result: EligibilityResult): void {
     this.db
       .prepare(
-        `INSERT INTO evaluations (owner, repo, evaluated_at, eligible, reasons)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO evaluations (provider, owner, repo, evaluated_at, eligible, reasons)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run(
+        result.repo.provider,
         result.repo.owner,
         result.repo.repo,
         new Date().toISOString(),
@@ -55,20 +64,20 @@ export class HistoryStore {
   listForRepo(ref: RepoRef, limit = 20): EvaluationRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id, owner, repo, evaluated_at, eligible, reasons
+        `SELECT id, provider, owner, repo, evaluated_at, eligible, reasons
          FROM evaluations
-         WHERE owner = ? AND repo = ?
+         WHERE provider = ? AND owner = ? AND repo = ?
          ORDER BY evaluated_at DESC, id DESC
          LIMIT ?`
       )
-      .all(ref.owner, ref.repo, limit) as EvaluationRow[];
+      .all(ref.provider, ref.owner, ref.repo, limit) as EvaluationRow[];
     return rows.map(toRecord);
   }
 
   listRecent(limit = 50): EvaluationRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id, owner, repo, evaluated_at, eligible, reasons
+        `SELECT id, provider, owner, repo, evaluated_at, eligible, reasons
          FROM evaluations
          ORDER BY evaluated_at DESC, id DESC
          LIMIT ?`

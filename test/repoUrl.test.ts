@@ -3,11 +3,16 @@ import { parseRepoRef, cloneUrlFor } from "../src/utils/repoUrl";
 
 describe("parseRepoRef", () => {
   it("parses owner/repo shorthand", () => {
-    expect(parseRepoRef("octocat/hello-world")).toEqual({ owner: "octocat", repo: "hello-world" });
+    expect(parseRepoRef("octocat/hello-world")).toEqual({
+      provider: "github",
+      owner: "octocat",
+      repo: "hello-world"
+    });
   });
 
   it("parses an https URL", () => {
     expect(parseRepoRef("https://github.com/octocat/hello-world")).toEqual({
+      provider: "github",
       owner: "octocat",
       repo: "hello-world"
     });
@@ -15,6 +20,7 @@ describe("parseRepoRef", () => {
 
   it("parses an https URL with a .git suffix", () => {
     expect(parseRepoRef("https://github.com/octocat/hello-world.git")).toEqual({
+      provider: "github",
       owner: "octocat",
       repo: "hello-world"
     });
@@ -22,13 +28,39 @@ describe("parseRepoRef", () => {
 
   it("parses an ssh URL", () => {
     expect(parseRepoRef("git@github.com:octocat/hello-world.git")).toEqual({
+      provider: "github",
       owner: "octocat",
       repo: "hello-world"
     });
   });
 
-  it("rejects non-GitHub hosts", () => {
-    expect(() => parseRepoRef("https://gitlab.com/octocat/hello-world")).toThrow();
+  // Parsing a provider is deliberately not the same as supporting it: these
+  // refs parse, and the provider registry is what rejects them (with a
+  // message that explains why) when an evaluation is attempted.
+  it("parses a GitLab https URL as the gitlab provider", () => {
+    expect(parseRepoRef("https://gitlab.com/octocat/hello-world")).toEqual({
+      provider: "gitlab",
+      owner: "octocat",
+      repo: "hello-world"
+    });
+  });
+
+  it("parses a Bitbucket ssh URL as the bitbucket provider", () => {
+    expect(parseRepoRef("git@bitbucket.org:octocat/hello-world.git")).toEqual({
+      provider: "bitbucket",
+      owner: "octocat",
+      repo: "hello-world"
+    });
+  });
+
+  it("assumes the default provider for bare owner/repo shorthand", () => {
+    expect(parseRepoRef("octocat/hello-world").provider).toBe("github");
+  });
+
+  it("rejects a host that belongs to no known provider", () => {
+    expect(() => parseRepoRef("https://git.internal.test/octocat/hello-world")).toThrow(
+      /Unsupported host/
+    );
   });
 
   it("rejects garbage input", () => {
@@ -84,6 +116,7 @@ describe("parseRepoRef", () => {
 
     it("still parses a legitimate github.com subdomain form the same as the bare host", () => {
       expect(parseRepoRef("https://github.com/octocat/hello-world")).toEqual({
+        provider: "github",
         owner: "octocat",
         repo: "hello-world"
       });
@@ -93,8 +126,17 @@ describe("parseRepoRef", () => {
 
 describe("cloneUrlFor", () => {
   it("builds an https clone URL", () => {
-    expect(cloneUrlFor({ owner: "octocat", repo: "hello-world" })).toBe(
+    expect(cloneUrlFor({ provider: "github", owner: "octocat", repo: "hello-world" })).toBe(
       "https://github.com/octocat/hello-world.git"
+    );
+  });
+
+  it("builds the clone URL from the ref's provider host", () => {
+    expect(cloneUrlFor({ provider: "gitlab", owner: "octocat", repo: "hello-world" })).toBe(
+      "https://gitlab.com/octocat/hello-world.git"
+    );
+    expect(cloneUrlFor({ provider: "bitbucket", owner: "octocat", repo: "hello-world" })).toBe(
+      "https://bitbucket.org/octocat/hello-world.git"
     );
   });
 });

@@ -30,12 +30,12 @@ describe("createHistoryStore", () => {
 
     store.record({
       eligible: true,
-      repo: { owner: "o", repo: "r" },
+      repo: { provider: "github", owner: "o", repo: "r" },
       checks: {} as never,
       reasons: []
     });
 
-    expect(store.listForRepo({ owner: "o", repo: "r" })).toHaveLength(1);
+    expect(store.listForRepo({ provider: "github", owner: "o", repo: "r" })).toHaveLength(1);
   });
 
   it("reuses the same underlying connection across multiple createHistoryStore() calls", async () => {
@@ -43,12 +43,12 @@ describe("createHistoryStore", () => {
 
     createHistoryStore().record({
       eligible: false,
-      repo: { owner: "o", repo: "r" },
+      repo: { provider: "github", owner: "o", repo: "r" },
       checks: {} as never,
       reasons: ["nope"]
     });
 
-    expect(createHistoryStore().listForRepo({ owner: "o", repo: "r" })).toHaveLength(1);
+    expect(createHistoryStore().listForRepo({ provider: "github", owner: "o", repo: "r" })).toHaveLength(1);
   });
 
   describe("closeHistoryStore", () => {
@@ -62,7 +62,7 @@ describe("createHistoryStore", () => {
 
       createHistoryStore().record({
         eligible: true,
-        repo: { owner: "o", repo: "r" },
+        repo: { provider: "github", owner: "o", repo: "r" },
         checks: {} as never,
         reasons: []
       });
@@ -71,7 +71,7 @@ describe("createHistoryStore", () => {
       // A fresh store reopens the (still on-disk) file rather than throwing
       // on a closed connection.
       const store = createHistoryStore();
-      expect(store.listForRepo({ owner: "o", repo: "r" })).toHaveLength(1);
+      expect(store.listForRepo({ provider: "github", owner: "o", repo: "r" })).toHaveLength(1);
     });
   });
 });

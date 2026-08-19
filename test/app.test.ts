@@ -71,7 +71,12 @@ describe("app", () => {
   });
 
   it("POST /eligibility/check returns the evaluator's result on success", async () => {
-    const fakeResult = { eligible: true, repo: { owner: "o", repo: "r" }, checks: {}, reasons: [] };
+    const fakeResult = {
+      eligible: true,
+      repo: { provider: "github", owner: "o", repo: "r" },
+      checks: {},
+      reasons: []
+    };
     evaluateEligibility.mockResolvedValue(fakeResult);
 
     const res = await request(createApp()).post("/eligibility/check").send({ repo: "o/r" });
@@ -79,7 +84,7 @@ describe("app", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual(fakeResult);
     expect(evaluateEligibility).toHaveBeenCalledWith(
-      { owner: "o", repo: "r" },
+      { provider: "github", owner: "o", repo: "r" },
       undefined,
       { cacheable: true }
     );
@@ -93,7 +98,7 @@ describe("app", () => {
       .send({ repo: "o/r", token: "caller-token" });
 
     expect(evaluateEligibility).toHaveBeenCalledWith(
-      { owner: "o", repo: "r" },
+      { provider: "github", owner: "o", repo: "r" },
       "caller-token",
       { cacheable: false }
     );
@@ -197,7 +202,13 @@ describe("app", () => {
 
   describe("GET /admin/evaluations", () => {
     it("lists recent evaluations across all repos by default", async () => {
-      const record = { id: 1, repo: { owner: "o", repo: "r" }, evaluatedAt: "2026-01-01T00:00:00Z", eligible: true, reasons: [] };
+      const record = {
+        id: 1,
+        repo: { provider: "github", owner: "o", repo: "r" },
+        evaluatedAt: "2026-01-01T00:00:00Z",
+        eligible: true,
+        reasons: []
+      };
       listRecent.mockReturnValue([record]);
 
       const res = await request(createApp()).get("/admin/evaluations");
@@ -214,7 +225,7 @@ describe("app", () => {
       const res = await request(createApp()).get("/admin/evaluations").query({ repo: "o/r" });
 
       expect(res.status).toBe(200);
-      expect(listForRepo).toHaveBeenCalledWith({ owner: "o", repo: "r" }, 50);
+      expect(listForRepo).toHaveBeenCalledWith({ provider: "github", owner: "o", repo: "r" }, 50);
     });
 
     it("respects a custom limit", async () => {
@@ -232,7 +243,9 @@ describe("app", () => {
     });
 
     it("rejects an unparseable repo query param", async () => {
-      const res = await request(createApp()).get("/admin/evaluations").query({ repo: "not a repo" });
+      const res = await request(createApp())
+        .get("/admin/evaluations")
+        .query({ repo: "not a repo" });
       expect(res.status).toBe(400);
       expect(listForRepo).not.toHaveBeenCalled();
     });

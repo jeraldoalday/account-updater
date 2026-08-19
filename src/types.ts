@@ -1,6 +1,15 @@
 import type { AllowedLanguage } from "./eligibility/thresholds";
+import type { ProviderId } from "./providers/hosts";
 
 export interface RepoRef {
+  /**
+   * Which forge the repo lives on. Required (rather than defaulting to
+   * GitHub somewhere deep in the call stack) so every place that clones,
+   * caches, or records a repo is forced to be explicit about it — a cache
+   * key or audit row that silently assumed GitHub would be wrong the moment
+   * a second provider is implemented.
+   */
+  provider: ProviderId;
   owner: string;
   repo: string;
 }
