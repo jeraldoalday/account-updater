@@ -1,4 +1,3 @@
-import { GitHubClient } from "../github/client";
 import { withShallowClone } from "../clone/tempClone";
 import { scanSource } from "../analysis/sourceScan";
 import { checkLanguage } from "./checks/language";
@@ -8,6 +7,8 @@ import { checkActiveDevelopment } from "./checks/activity";
 import { createCache } from "../cache/createCache";
 import { createHistoryStore } from "../history/createHistoryStore";
 import { metrics } from "../metrics/metrics";
+import { createProvider } from "../providers/registry";
+import { describeRef } from "../providers/hosts";
 import type { EligibilityResult, RepoRef } from "../types";
 
 export interface EvaluateOptions {
@@ -36,14 +37,20 @@ async function timedStage<T>(stage: string, fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
-async function computeEligibility(ref: RepoRef, token: string | undefined): Promise<EligibilityResult> {
-  const client = new GitHubClient(token);
+async function computeEligibility(
+  ref: RepoRef,
+  token: string | undefined
+): Promise<EligibilityResult> {
+  // Throws UnsupportedProviderError for a forge that parses but has no
+  // implementation yet - before any clone or API work is started, so an
+  // unsupported ref costs nothing.
+  const provider = createProvider(ref.provider, token);
   const overallStart = process.hrtime.bigint();
 
   const [scan, history, pushEvents] = await Promise.all([
     timedStage("cloneAndScan", () => withShallowClone(ref, token, (dir) => scanSource(dir))),
-    timedStage("commitHistory", () => client.getCommitHistorySummary(ref)),
-    timedStage("pushEvents", () => client.getPushEventSummary(ref))
+    timedStage("commitHistory", () => provider.getCommitHistorySummary(ref)),
+    timedStage("pushEvents", () => provider.getPushEventSummary(ref))
   ]);
 
   // Diagnoses which stage a slow check spent its time in, since the three
@@ -54,7 +61,7 @@ async function computeEligibility(ref: RepoRef, token: string | undefined): Prom
     JSON.stringify({
       level: "info",
       msg: "eligibility_check_timing",
-      repo: `${ref.owner}/${ref.repo}`,
+      repo: describeRef(ref),
       totalMs: Number((Number(process.hrtime.bigint() - overallStart) / 1_000_000).toFixed(1)),
       time: new Date().toISOString()
     })
@@ -104,7 +111,9 @@ export async function evaluateEligibility(
   options: EvaluateOptions = {}
 ): Promise<EligibilityResult> {
   const cacheable = options.cacheable ?? true;
-  const cacheKey = `${ref.owner}/${ref.repo}`;
+  // Provider-scoped: "acme/widgets" on two forges are two different
+  // projects, and a shared Redis cache must not serve one for the other.
+  const cacheKey = `${ref.provider}/${ref.owner}/${ref.repo}`;
 
   if (!cacheable) {
     return computeEligibility(ref, token);

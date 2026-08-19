@@ -6,12 +6,14 @@ const getPushEventSummary = vi.fn();
 const withShallowClone = vi.fn();
 const scanSource = vi.fn();
 const recordHistory = vi.fn();
+const createProvider = vi.fn(() => ({
+  id: "github",
+  getCommitHistorySummary,
+  getPushEventSummary
+}));
 
-vi.mock("../src/github/client", () => ({
-  GitHubClient: vi.fn().mockImplementation(() => ({
-    getCommitHistorySummary,
-    getPushEventSummary
-  }))
+vi.mock("../src/providers/registry", () => ({
+  createProvider: (...args: unknown[]) => createProvider(...args)
 }));
 
 vi.mock("../src/clone/tempClone", () => ({
@@ -55,11 +57,12 @@ describe("evaluateEligibility caching", () => {
       primaryLanguage: "TypeScript"
     });
     recordHistory.mockReset();
+    createProvider.mockClear();
     metrics.reset();
   });
 
   it("computes once and reuses the cached result for cacheable requests", async () => {
-    const ref = { owner: "cache-test-owner", repo: "cache-test-repo" };
+    const ref = { provider: "github" as const, owner: "cache-test-owner", repo: "cache-test-repo" };
 
     const first = await evaluateEligibility(ref, undefined, { cacheable: true });
     const second = await evaluateEligibility(ref, undefined, { cacheable: true });
@@ -76,7 +79,11 @@ describe("evaluateEligibility caching", () => {
   });
 
   it("recomputes every time for non-cacheable (per-request-token) requests", async () => {
-    const ref = { owner: "cache-test-owner-2", repo: "cache-test-repo-2" };
+    const ref = {
+      provider: "github" as const,
+      owner: "cache-test-owner-2",
+      repo: "cache-test-repo-2"
+    };
 
     await evaluateEligibility(ref, "caller-token", { cacheable: false });
     await evaluateEligibility(ref, "caller-token", { cacheable: false });
@@ -85,7 +92,11 @@ describe("evaluateEligibility caching", () => {
   });
 
   it("does not mix cacheable and non-cacheable results for the same repo", async () => {
-    const ref = { owner: "cache-test-owner-3", repo: "cache-test-repo-3" };
+    const ref = {
+      provider: "github" as const,
+      owner: "cache-test-owner-3",
+      repo: "cache-test-repo-3"
+    };
 
     await evaluateEligibility(ref, undefined, { cacheable: true });
     await evaluateEligibility(ref, "caller-token", { cacheable: false });
@@ -94,7 +105,11 @@ describe("evaluateEligibility caching", () => {
   });
 
   it("coalesces concurrent cache-miss requests for the same repo into one computation", async () => {
-    const ref = { owner: "cache-test-owner-4", repo: "cache-test-repo-4" };
+    const ref = {
+      provider: "github" as const,
+      owner: "cache-test-owner-4",
+      repo: "cache-test-repo-4"
+    };
 
     const [first, second, third] = await Promise.all([
       evaluateEligibility(ref, undefined, { cacheable: true }),
@@ -114,7 +129,11 @@ describe("evaluateEligibility caching", () => {
   });
 
   it("records one history entry per evaluation actually performed, not per request served", async () => {
-    const ref = { owner: "cache-test-owner-6", repo: "cache-test-repo-6" };
+    const ref = {
+      provider: "github" as const,
+      owner: "cache-test-owner-6",
+      repo: "cache-test-repo-6"
+    };
 
     const first = await evaluateEligibility(ref, undefined, { cacheable: true });
     await evaluateEligibility(ref, undefined, { cacheable: true }); // cache hit
@@ -123,9 +142,48 @@ describe("evaluateEligibility caching", () => {
     expect(recordHistory).toHaveBeenCalledWith(first);
   });
 
+  it("scopes the cache key by provider, so the same owner/repo on two forges is two entries", async () => {
+    const githubRef = { provider: "github" as const, owner: "dual", repo: "named" };
+    const gitlabRef = { provider: "gitlab" as const, owner: "dual", repo: "named" };
+
+    await evaluateEligibility(githubRef, undefined, { cacheable: true });
+    await evaluateEligibility(gitlabRef, undefined, { cacheable: true });
+
+    expect(withShallowClone).toHaveBeenCalledTimes(2);
+    expect(createProvider).toHaveBeenNthCalledWith(1, "github", undefined);
+    expect(createProvider).toHaveBeenNthCalledWith(2, "gitlab", undefined);
+  });
+
+  it("builds the provider from the ref and the caller's token", async () => {
+    const ref = { provider: "github" as const, owner: "token-test", repo: "repo" };
+    await evaluateEligibility(ref, "caller-token", { cacheable: false });
+    expect(createProvider).toHaveBeenCalledWith("github", "caller-token");
+  });
+
+  it("does not start clone or API work when the provider is unsupported", async () => {
+    createProvider.mockImplementationOnce(() => {
+      throw new Error("GitLab repositories are not supported yet");
+    });
+    const ref = { provider: "gitlab" as const, owner: "unsupported", repo: "repo" };
+
+    await expect(evaluateEligibility(ref, undefined, { cacheable: false })).rejects.toThrow(
+      /not supported yet/
+    );
+    expect(withShallowClone).not.toHaveBeenCalled();
+    expect(getCommitHistorySummary).not.toHaveBeenCalled();
+  });
+
   it("does not coalesce concurrent requests for different repos", async () => {
-    const refA = { owner: "cache-test-owner-5a", repo: "cache-test-repo-5a" };
-    const refB = { owner: "cache-test-owner-5b", repo: "cache-test-repo-5b" };
+    const refA = {
+      provider: "github" as const,
+      owner: "cache-test-owner-5a",
+      repo: "cache-test-repo-5a"
+    };
+    const refB = {
+      provider: "github" as const,
+      owner: "cache-test-owner-5b",
+      repo: "cache-test-repo-5b"
+    };
 
     await Promise.all([
       evaluateEligibility(refA, undefined, { cacheable: true }),
