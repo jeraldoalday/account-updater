@@ -90,4 +90,33 @@ describe("scanSource", () => {
       await rm(outsideDir, { recursive: true, force: true });
     }
   });
+
+  it("skips a source file too large to be plausible first-party source", async () => {
+    // A 3 MB generated/bundled file with a real source extension: counting
+    // it would both distort the line count and, on a big enough file, load
+    // the whole thing into memory as a UTF-16 string.
+    await writeFile(join(dir, "app.ts"), "a\nb\nc\n");
+    await writeFile(join(dir, "generated.ts"), "x\n".repeat(1_500_000));
+
+    const result = await scanSource(dir);
+
+    expect(result.totalFiles).toBe(1);
+    expect(result.totalLines).toBe(3);
+    expect(result.skippedLargeFiles).toBe(1);
+  });
+
+  it("reports no skipped files for an ordinary repo", async () => {
+    await writeFile(join(dir, "index.ts"), "a\nb\n");
+    const result = await scanSource(dir);
+    expect(result.skippedLargeFiles).toBe(0);
+  });
+
+  it("counts a file just under the size cap normally", async () => {
+    // Guards the boundary in the right direction: the cap must not start
+    // excluding large-but-legitimate source files.
+    await writeFile(join(dir, "big.ts"), "x\n".repeat(1_000_000)); // ~2 MB
+    const result = await scanSource(dir);
+    expect(result.skippedLargeFiles).toBe(0);
+    expect(result.totalFiles).toBe(1);
+  });
 });

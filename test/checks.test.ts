@@ -11,6 +11,7 @@ function scan(overrides: Partial<SourceScanResult> = {}): SourceScanResult {
     totalLines: 9000,
     totalFiles: 60,
     primaryLanguage: "TypeScript",
+    skippedLargeFiles: 0,
     ...overrides
   };
 }

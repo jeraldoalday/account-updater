@@ -100,6 +100,7 @@ async function computeEligibility(
       level: "info",
       msg: "eligibility_check_timing",
       repo: describeRef(ref),
+      skippedLargeFiles: scan.skippedLargeFiles,
       totalMs: Number((Number(process.hrtime.bigint() - overallStart) / 1_000_000).toFixed(1)),
       time: new Date().toISOString()
     })

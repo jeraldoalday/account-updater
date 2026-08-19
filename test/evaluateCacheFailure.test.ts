@@ -62,7 +62,8 @@ describe("evaluateEligibility when the cache backend is unavailable", () => {
       byLanguage: [{ language: "TypeScript", lines: 9000, files: 60 }],
       totalLines: 9000,
       totalFiles: 60,
-      primaryLanguage: "TypeScript"
+      primaryLanguage: "TypeScript",
+      skippedLargeFiles: 0
     });
     cacheGet.mockReset().mockResolvedValue(undefined);
     cacheSet.mockReset().mockResolvedValue(undefined);

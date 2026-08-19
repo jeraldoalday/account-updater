@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join, extname } from "node:path";
 import {
   ALLOWED_LANGUAGES,
@@ -47,6 +47,19 @@ const EXCLUDED_FILE_PATTERNS = [
   /\.pb\.go$/
 ];
 
+/**
+ * Files above this size are read past, not counted. A repo is untrusted
+ * input of unbounded size, and `readFile(..., "utf8")` materializes the
+ * whole file as a UTF-16 string - roughly twice its byte size in memory,
+ * with several evaluations able to run concurrently. Two megabytes is far
+ * above any hand-written source file; what actually lands above it is
+ * generated code, bundled/minified output, or a data blob committed with a
+ * source extension, none of which the first-party-source count should be
+ * including anyway. So the cap protects memory and improves the measure at
+ * the same time.
+ */
+const MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024;
+
 const extensionToLanguage = new Map<string, AllowedLanguage>();
 for (const lang of ALLOWED_LANGUAGES) {
   for (const ext of LANGUAGE_EXTENSIONS[lang]) {
@@ -92,13 +105,15 @@ async function walk(dir: string, relativeTo: string, out: string[]): Promise<voi
 
 /**
  * Walks a cloned repo's working tree and counts lines/files of first-party
- * source in the eligible languages, skipping vendored/build/generated paths.
+ * source in the eligible languages, skipping vendored/build/generated paths
+ * and any single file over MAX_SOURCE_FILE_BYTES.
  */
 export async function scanSource(rootDir: string): Promise<SourceScanResult> {
   const allFiles: string[] = [];
   await walk(rootDir, rootDir, allFiles);
 
   const stats = new Map<AllowedLanguage, { lines: number; files: number }>();
+  let skippedLargeFiles = 0;
 
   for (const filePath of allFiles) {
     const lang = extensionToLanguage.get(extname(filePath));
@@ -106,6 +121,13 @@ export async function scanSource(rootDir: string): Promise<SourceScanResult> {
 
     let content: string;
     try {
+      // Checked before reading, not after: the point is to never hold the
+      // file in memory at all.
+      const { size } = await stat(filePath);
+      if (size > MAX_SOURCE_FILE_BYTES) {
+        skippedLargeFiles++;
+        continue;
+      }
       content = await readFile(filePath, "utf8");
     } catch {
       continue; // unreadable/binary despite the extension; skip
@@ -125,5 +147,5 @@ export async function scanSource(rootDir: string): Promise<SourceScanResult> {
   const totalFiles = byLanguage.reduce((sum, s) => sum + s.files, 0);
   const primaryLanguage = byLanguage[0]?.language ?? null;
 
-  return { byLanguage, totalLines, totalFiles, primaryLanguage };
+  return { byLanguage, totalLines, totalFiles, primaryLanguage, skippedLargeFiles };
 }

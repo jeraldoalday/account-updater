@@ -71,6 +71,11 @@ async function main() {
   for (const s of scan.byLanguage) {
     console.log(`  ${s.language}: ${s.lines} lines, ${s.files} files`);
   }
+  if (scan.skippedLargeFiles > 0) {
+    // Explains a total that looks lower than expected, rather than leaving
+    // the omission invisible.
+    console.log(`\n  (${scan.skippedLargeFiles} oversized file(s) skipped as non-first-party)`);
+  }
 
   const eligible = language.passed && size.passed && historyCheck.passed && activity.passed;
   console.log(`\noverall: ${eligible ? "ELIGIBLE" : "NOT YET ELIGIBLE"}`);

@@ -25,6 +25,13 @@ export interface SourceScanResult {
   totalLines: number;
   totalFiles: number;
   primaryLanguage: string | null;
+  /**
+   * Files with an eligible extension that were too large to be plausible
+   * first-party source and were left out of the counts. Surfaced so a repo
+   * whose totals look surprisingly low is diagnosable, rather than the
+   * omission being invisible.
+   */
+  skippedLargeFiles: number;
 }
 
 export interface AuthorStats {

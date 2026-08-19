@@ -211,7 +211,11 @@ signal as neutral rather than disqualifying.
 - GitLab and Bitbucket URLs parse but cannot be evaluated yet — only the
   seam exists, not an implementation.
 - The size/line-count check counts raw lines (including blank lines and
-  comments) in files under the five eligible languages' extensions.
+  comments) in files under the five eligible languages' extensions, and
+  skips any single file over 2 MB — well above hand-written source, so what
+  it excludes is generated/bundled output or committed data blobs. The
+  number skipped is reported by the self-check CLI and in the per-check
+  timing log.
 
 ## Testing
 
