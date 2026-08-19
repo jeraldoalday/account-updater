@@ -70,8 +70,16 @@ or `docker compose up` (reads `.env`; the image reports its own health via
 
 The full API is described by an OpenAPI 3.0 document served at
 `GET /openapi.json` (hand-maintained in `src/openapi.ts`, checked by tests
-that every `$ref` resolves and that the documented request bodies match
-what the routes actually accept).
+that every `$ref` resolves, that the documented request bodies match what
+the routes actually accept, that every route the app serves is documented
+and vice versa, and that the documented counters match what `/metrics`
+returns).
+
+To try the endpoints without assembling requests by hand, import
+[`docs/postman_collection.json`](docs/postman_collection.json) into Postman
+or Insomnia — it's generated from that spec by `npm run collection`, with
+runnable example bodies and the base URL and API key as collection
+variables. A test fails if the committed copy drifts from the spec.
 
 If `API_KEY` is set, every `/eligibility/*` request must include a matching
 `x-api-key` header, or it's rejected with 401. Leave `API_KEY` unset for
@@ -85,6 +93,16 @@ API. Requests over the limit get a 429 with a `Retry-After` header.
 Every response carries an `x-request-id` header (reusing an incoming one if
 the caller sends it) for correlating a report with server logs, which are
 emitted as structured JSON.
+
+`GET /health` reports that the process is alive (and is what the Docker
+`HEALTHCHECK` polls). `GET /ready` answers the different question of
+whether this instance should be sent traffic: it checks the cache backend
+and the SQLite audit trail, and returns 503 with a per-dependency reason
+when either is unusable. The two are separate because both of those
+failures are non-fatal per request by design — a cache error degrades to a
+miss, an audit-trail write failure is swallowed — so a degraded instance
+would otherwise look perfectly healthy while paying full clone and API
+cost on every request.
 
 `GET /metrics` returns in-memory counters (request volume by status class,
 eligibility pass/fail counts, cache hit/miss counts, and per-stage
@@ -216,6 +234,18 @@ signal as neutral rather than disqualifying.
   it excludes is generated/bundled output or committed data blobs. The
   number skipped is reported by the self-check CLI and in the per-check
   timing log.
+
+## Documentation
+
+- [`docs/architecture.md`](docs/architecture.md) — request lifecycle,
+  module map, extension seams, trust boundaries, and which failures the
+  service survives on purpose.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, the checks to run before
+  pushing, commit-message style, and the invariants a change has to keep.
+- [`CHANGELOG.md`](CHANGELOG.md) — what a caller or operator would notice
+  changing between versions.
+- [`docs/postman_collection.json`](docs/postman_collection.json) —
+  importable request collection, generated from the OpenAPI spec.
 
 ## Testing
 
