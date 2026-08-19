@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openApiSpec } from "../src/openapi";
+import { metrics } from "../src/metrics/metrics";
+import { toPrometheusText } from "../src/metrics/prometheusFormat";
 import { PROVIDER_IDS } from "../src/providers/hosts";
 import { supportedProviderIds } from "../src/providers/registry";
 
@@ -75,6 +77,34 @@ describe("openApiSpec", () => {
     }
     for (const id of PROVIDER_IDS) {
       expect(openApiSpec.info.description).toContain(id);
+    }
+  });
+
+  it("documents exactly the counters GET /metrics actually returns", () => {
+    // The spec is hand-written, so a counter added to the snapshot can
+    // silently never reach it - which is how `cacheErrors` ended up
+    // exported by /metrics and /metrics/prometheus but absent here. Compare
+    // both directions so neither a new counter nor a removed one drifts.
+    const documented = Object.keys(openApiSpec.components.schemas.Metrics.properties).sort();
+    const actual = Object.keys(metrics.snapshot()).sort();
+    expect(documented).toEqual(actual);
+  });
+
+  it("exports every documented counter in the Prometheus rendering too", () => {
+    // Same drift, other exporter: a counter can be documented and returned
+    // as JSON while the Prometheus text rendering forgets it.
+    const text = toPrometheusText(metrics.snapshot());
+    const scalarCounters = Object.entries(openApiSpec.components.schemas.Metrics.properties)
+      .filter(([, schema]) => (schema as { type?: string }).type === "number")
+      .map(([name]) => name);
+
+    expect(scalarCounters.length).toBeGreaterThan(0);
+    for (const name of scalarCounters) {
+      // requestsTotal -> account_updater_requests_total, cacheErrors ->
+      // account_updater_cache_errors_total.
+      const snake = name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+      const metricName = `account_updater_${snake.endsWith("_total") ? snake : `${snake}_total`}`;
+      expect(text).toContain(metricName);
     }
   });
 

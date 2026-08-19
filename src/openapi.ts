@@ -346,6 +346,13 @@ export const openApiSpec = {
           eligibilityFailed: { type: "number" },
           cacheHits: { type: "number" },
           cacheMisses: { type: "number" },
+          cacheErrors: {
+            type: "number",
+            description:
+              "Cache reads/writes that failed outright (e.g. the shared Redis backend " +
+              "being unreachable). The affected requests still succeed by computing the " +
+              "result, so a non-zero value here explains a collapsed hit rate."
+          },
           stageDurations: {
             type: "object",
             additionalProperties: {
