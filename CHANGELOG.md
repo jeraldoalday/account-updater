@@ -80,6 +80,11 @@ unreleased.
   request, and is counted (`cacheErrors`) and reported by `GET /ready`.
 - Clone failures are scrubbed of any token before the error reaches a log
   line or response.
+- A GitHub 403 that is a permissions failure (a token without access to a
+  private repo, or one not SSO-authorized for an organization) is no
+  longer reported as rate limiting: it answers 502 immediately instead of
+  503 "try again later" after three pointless retries that spent more of
+  the caller's quota.
 - The rate limiter no longer buckets by the raw `x-api-key` header, which
   let any caller escape the limit by sending a different value on each
   request. Only a header matching the configured `API_KEY` selects a

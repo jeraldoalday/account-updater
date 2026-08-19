@@ -153,6 +153,13 @@ are exhausted), the endpoint returns 503 with a `Retry-After` header and a
 which may be absent if GitHub didn't report them) instead of a generic 502,
 so callers can back off intelligently rather than retrying immediately.
 
+GitHub answers 403 for both rate limiting and plain permission failures,
+so the two are told apart by evidence (an exhausted quota, a `Retry-After`,
+or GitHub naming a secondary rate limit in the message). A 403 that is
+really "this token can't see that repo" is answered as a 502 straight
+away, rather than being retried and then reported as a rate limit the
+caller could wait out.
+
 `POST /eligibility/check-batch`
 
 ```json

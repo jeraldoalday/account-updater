@@ -1,3 +1,5 @@
+import { isRateLimitError } from "./rateLimitInfo";
+
 export interface RetryOptions {
   retries: number;
   baseDelayMs: number;
@@ -10,12 +12,16 @@ interface OctokitLikeError {
   response?: { headers?: Record<string, string> };
 }
 
-// 5xx and 429 are ordinary transient failures. GitHub also reports both
-// primary and secondary rate limiting as 403, so treat 403 as retryable too
-// rather than trying to distinguish it from a real permissions error.
+// 5xx and 429 are ordinary transient failures. A 403 is retryable only
+// when it is really rate limiting: GitHub uses the same status for a token
+// that simply can't see the repo, and retrying that spends the retry
+// budget - and more of the caller's quota - on attempts that cannot
+// succeed, delaying an error the caller could have had immediately.
 function isRetryable(err: unknown): boolean {
   const status = (err as OctokitLikeError)?.status;
-  return status !== undefined && (status === 403 || status === 429 || status >= 500);
+  if (status === undefined) return false;
+  if (status >= 500) return true;
+  return isRateLimitError(err);
 }
 
 function retryAfterMs(err: unknown): number | null {

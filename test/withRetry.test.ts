@@ -20,15 +20,42 @@ describe("withRetry", () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  it("retries on 403 (rate limiting) and 429", async () => {
+  it("retries a 403 that is really rate limiting, and a 429", async () => {
+    // Primary rate limiting: quota exhausted, reported in the headers.
     const fn = vi
       .fn()
-      .mockRejectedValueOnce(errorWithStatus(403))
+      .mockRejectedValueOnce(errorWithStatus(403, { "x-ratelimit-remaining": "0" }))
       .mockRejectedValueOnce(errorWithStatus(429))
       .mockResolvedValueOnce("ok");
     const result = await withRetry(fn, { retries: 3, baseDelayMs: 1 });
     expect(result).toBe("ok");
     expect(fn).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries a secondary rate limit, which says so in the message", async () => {
+    const secondary = Object.assign(
+      new Error("You have exceeded a secondary rate limit. Please wait a few minutes."),
+      { status: 403, response: { headers: {} } }
+    );
+    const fn = vi.fn().mockRejectedValueOnce(secondary).mockResolvedValueOnce("ok");
+
+    await expect(withRetry(fn, { retries: 3, baseDelayMs: 1 })).resolves.toBe("ok");
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a 403 that is a permissions failure", async () => {
+    // A token that can't see the repo will never be able to see it, so
+    // retrying only delays the error and spends more of the caller's quota.
+    const forbidden = Object.assign(new Error("Resource not accessible by integration"), {
+      status: 403,
+      response: { headers: { "x-ratelimit-remaining": "4783" } }
+    });
+    const fn = vi.fn().mockRejectedValue(forbidden);
+
+    await expect(withRetry(fn, { retries: 3, baseDelayMs: 1 })).rejects.toThrow(
+      "Resource not accessible"
+    );
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 
   it("gives up and throws after exhausting retries", async () => {
