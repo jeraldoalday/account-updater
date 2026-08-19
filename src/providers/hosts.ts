@@ -23,6 +23,12 @@ export interface ProviderHostSpec {
   hostPattern: RegExp;
   /** SSH shorthand prefix, e.g. "git@github.com:". */
   sshPrefix: string;
+  /**
+   * Username to pair with a token when cloning over https. Each forge
+   * expects its own fixed placeholder here and rejects the others, so this
+   * is per-provider data rather than a constant.
+   */
+  cloneTokenUser: string;
 }
 
 export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
@@ -31,21 +37,24 @@ export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
     displayName: "GitHub",
     host: "github.com",
     hostPattern: /^(?:[a-z0-9-]+\.)*github\.com$/i,
-    sshPrefix: "git@github.com:"
+    sshPrefix: "git@github.com:",
+    cloneTokenUser: "x-access-token"
   },
   gitlab: {
     id: "gitlab",
     displayName: "GitLab",
     host: "gitlab.com",
     hostPattern: /^(?:[a-z0-9-]+\.)*gitlab\.com$/i,
-    sshPrefix: "git@gitlab.com:"
+    sshPrefix: "git@gitlab.com:",
+    cloneTokenUser: "oauth2"
   },
   bitbucket: {
     id: "bitbucket",
     displayName: "Bitbucket",
     host: "bitbucket.org",
     hostPattern: /^(?:[a-z0-9-]+\.)*bitbucket\.org$/i,
-    sshPrefix: "git@bitbucket.org:"
+    sshPrefix: "git@bitbucket.org:",
+    cloneTokenUser: "x-token-auth"
   }
 };
 
@@ -96,6 +105,19 @@ export function matchSshPrefix(input: string): { id: ProviderId; rest: string } 
 export function cloneUrlFor(ref: RepoRef): string {
   const spec = providerHost(ref.provider);
   return `https://${spec.host}/${ref.owner}/${ref.repo}.git`;
+}
+
+/**
+ * The clone URL with a token embedded as userinfo, using whichever
+ * placeholder username the provider expects. The token is percent-encoded
+ * because git decodes userinfo before using it, so an unencoded "/" or "@"
+ * in a token would otherwise corrupt the URL.
+ */
+export function authenticatedCloneUrl(ref: RepoRef, token?: string): string {
+  const url = cloneUrlFor(ref);
+  if (!token) return url;
+  const user = providerHost(ref.provider).cloneTokenUser;
+  return url.replace("https://", `https://${user}:${encodeURIComponent(token)}@`);
 }
 
 /** "github.com/octocat/hello-world" — for log lines and error messages. */

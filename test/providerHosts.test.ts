@@ -3,6 +3,7 @@ import {
   DEFAULT_PROVIDER_ID,
   PROVIDER_HOSTS,
   PROVIDER_IDS,
+  authenticatedCloneUrl,
   cloneUrlFor,
   describeRef,
   matchSshPrefix,
@@ -71,6 +72,41 @@ describe("cloneUrlFor", () => {
       expect(url).toBe(`https://${PROVIDER_HOSTS[id].host}/octocat/hello.git`);
       expect(new URL(url).protocol).toBe("https:");
     }
+  });
+});
+
+describe("authenticatedCloneUrl", () => {
+  it("returns the plain clone URL when there is no token", () => {
+    expect(authenticatedCloneUrl({ provider: "github", owner: "octocat", repo: "hello" })).toBe(
+      "https://github.com/octocat/hello.git"
+    );
+  });
+
+  it("uses each provider's own placeholder username for the token", () => {
+    const users: Record<string, string> = {
+      github: "x-access-token",
+      gitlab: "oauth2",
+      bitbucket: "x-token-auth"
+    };
+    for (const id of PROVIDER_IDS) {
+      const url = new URL(
+        authenticatedCloneUrl({ provider: id, owner: "octocat", repo: "hello" }, "secret")
+      );
+      expect(url.username).toBe(users[id]);
+      expect(url.password).toBe("secret");
+      expect(url.hostname).toBe(PROVIDER_HOSTS[id].host);
+    }
+  });
+
+  it("percent-encodes the token so it cannot change the host", () => {
+    const url = new URL(
+      authenticatedCloneUrl(
+        { provider: "github", owner: "octocat", repo: "hello" },
+        "a@evil.test/b"
+      )
+    );
+    expect(url.hostname).toBe("github.com");
+    expect(decodeURIComponent(url.password)).toBe("a@evil.test/b");
   });
 });
 
