@@ -15,6 +15,7 @@ describe("metrics", () => {
       eligibilityFailed: 0,
       cacheHits: 0,
       cacheMisses: 0,
+      cacheErrors: 0,
       stageDurations: {}
     });
   });
@@ -48,6 +49,25 @@ describe("metrics", () => {
     const snapshot = metrics.snapshot();
     expect(snapshot.cacheMisses).toBe(2);
     expect(snapshot.cacheHits).toBe(1);
+  });
+
+  it("counts cache errors separately from hits and misses", () => {
+    // A failed cache read is neither a hit nor a miss: counting it as a
+    // miss would hide a broken backend behind a normal-looking hit rate.
+    metrics.recordCacheMiss();
+    metrics.recordCacheError();
+    metrics.recordCacheError();
+
+    const snapshot = metrics.snapshot();
+    expect(snapshot.cacheErrors).toBe(2);
+    expect(snapshot.cacheMisses).toBe(1);
+    expect(snapshot.cacheHits).toBe(0);
+  });
+
+  it("resets cache errors along with every other counter", () => {
+    metrics.recordCacheError();
+    metrics.reset();
+    expect(metrics.snapshot().cacheErrors).toBe(0);
   });
 
   it("aggregates per-stage durations into count/avg/max, keyed independently per stage", () => {

@@ -29,6 +29,44 @@ const resultCache = createCache<EligibilityResult>();
 const inFlight = new Map<string, Promise<EligibilityResult>>();
 const historyStore = createHistoryStore();
 
+/**
+ * The cache is an optimization, not a dependency: a shared Redis backend
+ * being unreachable must not take the eligibility endpoint down with it.
+ * A failed read degrades to a miss and a failed write is dropped, both
+ * counted and logged so the degradation is visible rather than silent.
+ */
+async function readCache(key: string): Promise<EligibilityResult | undefined> {
+  try {
+    return await resultCache.get(key);
+  } catch (err) {
+    metrics.recordCacheError();
+    logCacheFailure("read", key, err);
+    return undefined;
+  }
+}
+
+async function writeCache(key: string, result: EligibilityResult): Promise<void> {
+  try {
+    await resultCache.set(key, result);
+  } catch (err) {
+    metrics.recordCacheError();
+    logCacheFailure("write", key, err);
+  }
+}
+
+function logCacheFailure(operation: "read" | "write", key: string, err: unknown): void {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      msg: "cache_unavailable",
+      operation,
+      key,
+      error: (err as Error).message,
+      time: new Date().toISOString()
+    })
+  );
+}
+
 async function timedStage<T>(stage: string, fn: () => Promise<T>): Promise<T> {
   const start = process.hrtime.bigint();
   const result = await fn();
@@ -119,7 +157,7 @@ export async function evaluateEligibility(
     return computeEligibility(ref, token);
   }
 
-  const cached = await resultCache.get(cacheKey);
+  const cached = await readCache(cacheKey);
   if (cached) {
     metrics.recordCacheHit();
     return cached;
@@ -133,7 +171,7 @@ export async function evaluateEligibility(
 
   const pending = computeEligibility(ref, token)
     .then(async (result) => {
-      await resultCache.set(cacheKey, result);
+      await writeCache(cacheKey, result);
       return result;
     })
     .finally(() => inFlight.delete(cacheKey));

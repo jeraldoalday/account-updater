@@ -22,7 +22,11 @@ function counter(name: string, help: string, value: number): string[] {
  */
 export function toPrometheusText(snapshot: MetricsSnapshot): string {
   const lines: string[] = [
-    ...counter("account_updater_requests_total", "Total HTTP requests handled", snapshot.requestsTotal),
+    ...counter(
+      "account_updater_requests_total",
+      "Total HTTP requests handled",
+      snapshot.requestsTotal
+    ),
     "# HELP account_updater_requests_by_status_total HTTP requests handled, by status class",
     "# TYPE account_updater_requests_by_status_total counter",
     ...Object.entries(snapshot.requestsByStatusClass).map(([statusClass, count]) =>
@@ -43,11 +47,20 @@ export function toPrometheusText(snapshot: MetricsSnapshot): string {
       "Eligibility checks that failed",
       snapshot.eligibilityFailed
     ),
-    ...counter("account_updater_cache_hits_total", "Eligibility result cache hits", snapshot.cacheHits),
+    ...counter(
+      "account_updater_cache_hits_total",
+      "Eligibility result cache hits",
+      snapshot.cacheHits
+    ),
     ...counter(
       "account_updater_cache_misses_total",
       "Eligibility result cache misses",
       snapshot.cacheMisses
+    ),
+    ...counter(
+      "account_updater_cache_errors_total",
+      "Eligibility result cache reads/writes that failed (result still computed)",
+      snapshot.cacheErrors
     ),
     "# HELP account_updater_stage_duration_count_total Evaluation stage observations, by stage",
     "# TYPE account_updater_stage_duration_count_total counter",

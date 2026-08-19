@@ -154,6 +154,13 @@ The cache backend is `memory` by default (per-process, lost on restart —
 fine for a single instance). Set `CACHE_BACKEND=redis` and `REDIS_URL` to
 share cached results across multiple instances of the service instead.
 
+The cache is treated as an optimization, not a dependency: if the backend
+is unreachable, a failed read degrades to a miss and a failed write is
+dropped, so requests are still answered by computing the result. Those
+failures are logged (`cache_unavailable`) and counted as `cacheErrors` in
+`/metrics`, since otherwise a broken shared cache would show up only as a
+mysteriously collapsed hit rate.
+
 Concurrent cacheable requests for the same repo that all miss the cache
 share a single in-flight computation rather than each cloning and
 re-checking the repo independently.

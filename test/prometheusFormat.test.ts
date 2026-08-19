@@ -11,6 +11,7 @@ function emptySnapshot(): MetricsSnapshot {
     eligibilityFailed: 0,
     cacheHits: 0,
     cacheMisses: 0,
+    cacheErrors: 0,
     stageDurations: {}
   };
 }
@@ -57,5 +58,11 @@ describe("toPrometheusText", () => {
   it("ends with a trailing newline", () => {
     const text = toPrometheusText(emptySnapshot());
     expect(text.endsWith("\n")).toBe(true);
+  });
+
+  it("exposes cache errors so a degraded shared cache is visible to scrapers", () => {
+    const text = toPrometheusText({ ...emptySnapshot(), cacheErrors: 3 });
+    expect(text).toContain("# TYPE account_updater_cache_errors_total counter");
+    expect(text).toContain("account_updater_cache_errors_total 3");
   });
 });
