@@ -171,7 +171,7 @@ export const openApiSpec = {
             name: "limit",
             in: "query",
             required: false,
-            schema: { type: "integer", minimum: 1, maximum: 200 }
+            schema: { type: "integer", minimum: 1, maximum: 200, default: 50 }
           }
         ],
         responses: {
@@ -234,7 +234,8 @@ export const openApiSpec = {
             type: "array",
             items: { type: "string" },
             minItems: 1,
-            maxItems: 20
+            maxItems: 20,
+            example: ["octocat/Hello-World", "rust-lang/rust"]
           },
           token: { type: "string" }
         }

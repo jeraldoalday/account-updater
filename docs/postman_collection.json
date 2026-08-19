@@ -1,0 +1,212 @@
+{
+  "info": {
+    "name": "account-updater v0.1.0",
+    "description": "Checks whether a repo meets the eligibility requirements to connect an account. Repo references on github, gitlab, bitbucket are recognized; evaluation is currently implemented for github only.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "general",
+      "item": [
+        {
+          "name": "Liveness/readiness check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "This spec",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/openapi.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "openapi.json"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "metrics",
+      "item": [
+        {
+          "name": "In-memory operational counters for this process",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Prometheus text-exposition-format view of the same counters as GET /metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics/prometheus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics",
+                "prometheus"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "eligibility",
+      "item": [
+        {
+          "name": "Evaluate a single repo's eligibility",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eligibility/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eligibility",
+                "check"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"repo\": \"octocat/Hello-World\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Evaluate up to 20 repos in one request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/eligibility/check-batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "eligibility",
+                "check-batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"repos\": [\n    \"octocat/Hello-World\",\n    \"rust-lang/rust\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admin",
+      "item": [
+        {
+          "name": "Read-only view of the evaluation audit trail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/evaluations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "evaluations"
+              ],
+              "query": [
+                {
+                  "key": "repo",
+                  "value": "",
+                  "description": "\"owner/name\" or a repo URL - when omitted, lists the most recent evaluations across all repos. Filtering is scoped to the reference's provider as well as its owner/repo.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Lists past evaluations from the SQLite audit trail, most recent first. Filter to one repo with `repo`, and cap the result count with `limit` (default 50, max 200)."
+          }
+        }
+      ]
+    }
+  ]
+}
