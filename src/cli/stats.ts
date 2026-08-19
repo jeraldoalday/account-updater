@@ -48,7 +48,9 @@ async function main() {
 
   console.log("account-updater self-check (local, uncommitted work not tracked by git)\n");
 
-  console.log(`[${statusIcon(language.passed)}] language     primary=${language.primaryLanguage ?? "none"}`);
+  console.log(
+    `[${statusIcon(language.passed)}] language     primary=${language.primaryLanguage ?? "none"}`
+  );
   console.log(
     `[${statusIcon(size.passed)}] size         lines=${size.totalLines}  files=${size.totalFiles}`
   );

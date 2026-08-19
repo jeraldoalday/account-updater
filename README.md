@@ -224,3 +224,18 @@ npm run typecheck   # type-checks src (build config) and test (test config)
 types without checking them, and the build config excludes `test/`, so
 without the second pass a test could call a function with the wrong
 arguments and still appear to pass.
+
+### Load testing
+
+```bash
+npm run loadtest -- --repo owner/name --url http://localhost:3000 \
+  --requests 200 --concurrency 20 [--api-key ...]
+```
+
+Drives a running instance and reports status distribution, latency
+percentiles, and — read from `/metrics` before and after the run — how many
+evaluations the service actually performed. Every request names the same
+repo deliberately: the numbers worth looking at are how many requests the
+rate limiter rejects (429s), and how far below the request count the
+`evaluations` figure lands, which is the cache and in-flight coalescing
+doing their job.

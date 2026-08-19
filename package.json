@@ -9,6 +9,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "node dist/index.js",
     "stats": "npm run build --silent && node dist/cli/stats.js",
+    "loadtest": "npm run build --silent && node dist/cli/loadtest.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
