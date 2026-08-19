@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "stats": "npm run build --silent && node dist/cli/stats.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

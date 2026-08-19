@@ -1,0 +1,17 @@
+{
+  // The base config emits from src only, so it excludes test/ - and an
+  // inherited `exclude` wins over this file's `include`, which is why it
+  // has to be overridden explicitly here rather than just adding to
+  // `include`. Type-checking only, never emitted.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    // Vitest loads these as ES modules, so top-level await in a test file
+    // is valid there even though the built service is CommonJS.
+    "module": "ES2022",
+    "moduleResolution": "node"
+  },
+  "include": ["src", "test"],
+  "exclude": ["node_modules", "dist"]
+}

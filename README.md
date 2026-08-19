@@ -210,5 +210,10 @@ signal as neutral rather than disqualifying.
 
 ```bash
 npm test        # unit tests (vitest) — no network access required
-npm run typecheck
+npm run typecheck   # type-checks src (build config) and test (test config)
 ```
+
+`npm run typecheck` covers the test suite as well as `src`. Vitest strips
+types without checking them, and the build config excludes `test/`, so
+without the second pass a test could call a function with the wrong
+arguments and still appear to pass.

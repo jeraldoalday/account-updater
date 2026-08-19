@@ -29,7 +29,7 @@ function linkHeader(lastPage: number) {
 }
 
 describe("GitHubClient.getCommitHistorySummary", () => {
-  const ref = { owner: "octocat", repo: "hello-world" };
+  const ref = { provider: "github" as const, owner: "octocat", repo: "hello-world" };
 
   beforeEach(() => {
     listCommits.mockReset();
@@ -139,7 +139,7 @@ describe("GitHubClient.getCommitHistorySummary", () => {
 });
 
 describe("GitHubClient.getPushEventSummary", () => {
-  const ref = { owner: "octocat", repo: "hello-world" };
+  const ref = { provider: "github" as const, owner: "octocat", repo: "hello-world" };
 
   beforeEach(() => {
     listRepoEvents.mockReset();

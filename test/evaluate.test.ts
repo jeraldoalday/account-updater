@@ -6,14 +6,14 @@ const getPushEventSummary = vi.fn();
 const withShallowClone = vi.fn();
 const scanSource = vi.fn();
 const recordHistory = vi.fn();
-const createProvider = vi.fn(() => ({
+const createProvider = vi.fn((_providerId: string, _token?: string) => ({
   id: "github",
   getCommitHistorySummary,
   getPushEventSummary
 }));
 
 vi.mock("../src/providers/registry", () => ({
-  createProvider: (...args: unknown[]) => createProvider(...args)
+  createProvider: (providerId: string, token?: string) => createProvider(providerId, token)
 }));
 
 vi.mock("../src/clone/tempClone", () => ({

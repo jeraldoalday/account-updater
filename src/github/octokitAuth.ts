@@ -7,7 +7,10 @@ export interface GitHubAppAuthConfig {
   installationId: number;
 }
 
-export type OctokitOptions = ConstructorParameters<typeof Octokit>[0];
+// Octokit's constructor parameter is optional, so the raw type includes
+// `undefined`; this function always returns an options object, and callers
+// shouldn't have to narrow a value that can't be undefined.
+export type OctokitOptions = NonNullable<ConstructorParameters<typeof Octokit>[0]>;
 
 // Precedence: an explicit token (a per-request caller token, e.g. the
 // connecting user's own OAuth token, or the shared GITHUB_TOKEN PAT once
