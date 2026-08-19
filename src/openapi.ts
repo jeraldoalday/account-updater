@@ -1,3 +1,5 @@
+import { PROVIDER_IDS } from "./providers/hosts";
+import { supportedProviderIds } from "./providers/registry";
 import { version } from "./version";
 
 // Hand-written rather than generated from the zod schemas/routes — small
@@ -8,7 +10,9 @@ export const openApiSpec = {
   info: {
     title: "account-updater",
     description:
-      "Checks whether a GitHub repo meets the eligibility requirements to connect an account.",
+      "Checks whether a repo meets the eligibility requirements to connect an account. " +
+      `Repo references on ${PROVIDER_IDS.join(", ")} are recognized; ` +
+      `evaluation is currently implemented for ${supportedProviderIds().join(", ")} only.`,
     version
   },
   paths: {
@@ -84,7 +88,11 @@ export const openApiSpec = {
               "application/json": { schema: { $ref: "#/components/schemas/EligibilityResult" } }
             }
           },
-          "400": { description: "Invalid request body or unparseable repo reference." },
+          "400": {
+            description:
+              "Invalid request body, unparseable repo reference, or a repo on a recognized " +
+              "but not-yet-supported provider."
+          },
           "401": { description: "Missing or invalid API key (only when API_KEY is configured)." },
           "429": { description: "Rate limit exceeded." },
           "502": { description: "Evaluation failed for a reason other than GitHub rate limiting." },
@@ -131,7 +139,11 @@ export const openApiSpec = {
               }
             }
           },
-          "400": { description: "Invalid request body (empty or over the 20-repo cap)." },
+          "400": {
+            description:
+              "Invalid request body (empty or over the 20-repo cap). Per-entry failures, " +
+              "including a not-yet-supported provider, are reported inside a 200 response."
+          },
           "401": { description: "Missing or invalid API key (only when API_KEY is configured)." },
           "429": { description: "Rate limit exceeded." }
         }
@@ -150,7 +162,10 @@ export const openApiSpec = {
             in: "query",
             required: false,
             schema: { type: "string" },
-            description: '"owner/name" - when omitted, lists the most recent evaluations across all repos.'
+            description:
+              '"owner/name" or a repo URL - when omitted, lists the most recent ' +
+              "evaluations across all repos. Filtering is scoped to the reference's " +
+              "provider as well as its owner/repo."
           },
           {
             name: "limit",
@@ -198,12 +213,16 @@ export const openApiSpec = {
         properties: {
           repo: {
             type: "string",
-            description: '"owner/name", a GitHub URL, or an SSH URL.',
+            description:
+              '"owner/name" (assumed to be on GitHub), or an https/SSH URL on any ' +
+              "recognized provider.",
             example: "octocat/Hello-World"
           },
           token: {
             type: "string",
-            description: "Optional per-request GitHub token, overriding GITHUB_TOKEN."
+            description:
+              "Optional per-request provider token, overriding GITHUB_TOKEN. Results " +
+              "computed with it are never cached."
           }
         }
       },
@@ -218,6 +237,15 @@ export const openApiSpec = {
             maxItems: 20
           },
           token: { type: "string" }
+        }
+      },
+      RepoRef: {
+        type: "object",
+        description: "The repo an evaluation refers to, including which provider it lives on.",
+        properties: {
+          provider: { type: "string", enum: PROVIDER_IDS },
+          owner: { type: "string" },
+          repo: { type: "string" }
         }
       },
       CheckResult: {
@@ -272,10 +300,7 @@ export const openApiSpec = {
         type: "object",
         properties: {
           eligible: { type: "boolean" },
-          repo: {
-            type: "object",
-            properties: { owner: { type: "string" }, repo: { type: "string" } }
-          },
+          repo: { $ref: "#/components/schemas/RepoRef" },
           checks: {
             type: "object",
             properties: {
@@ -338,10 +363,7 @@ export const openApiSpec = {
         type: "object",
         properties: {
           id: { type: "integer" },
-          repo: {
-            type: "object",
-            properties: { owner: { type: "string" }, repo: { type: "string" } }
-          },
+          repo: { $ref: "#/components/schemas/RepoRef" },
           evaluatedAt: { type: "string", format: "date-time" },
           eligible: { type: "boolean" },
           reasons: { type: "array", items: { type: "string" } }

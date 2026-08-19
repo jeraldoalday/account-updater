@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openApiSpec } from "../src/openapi";
+import { PROVIDER_IDS } from "../src/providers/hosts";
+import { supportedProviderIds } from "../src/providers/registry";
 
 function resolveRef(spec: unknown, ref: string): unknown {
   const path = ref.replace(/^#\//, "").split("/");
@@ -48,9 +50,32 @@ describe("openApiSpec", () => {
     expect(schema.allOf[1].properties.score).toBeTruthy();
 
     const checks = openApiSpec.components.schemas.EligibilityResult.properties.checks.properties;
-    expect(checks.activeDevelopment.$ref).toBe(
-      "#/components/schemas/ActiveDevelopmentCheckResult"
+    expect(checks.activeDevelopment.$ref).toBe("#/components/schemas/ActiveDevelopmentCheckResult");
+  });
+
+  it("describes results as provider-scoped repo references", () => {
+    const repoRef = openApiSpec.components.schemas.RepoRef;
+    expect(repoRef.properties.provider.enum).toEqual(PROVIDER_IDS);
+
+    // Both the live result and the audit-trail record name the same shape,
+    // so a client can't be told the provider in one place and not the other.
+    expect(openApiSpec.components.schemas.EligibilityResult.properties.repo.$ref).toBe(
+      "#/components/schemas/RepoRef"
     );
+    expect(openApiSpec.components.schemas.EvaluationRecord.properties.repo.$ref).toBe(
+      "#/components/schemas/RepoRef"
+    );
+  });
+
+  it("says which providers are recognized and which are actually implemented", () => {
+    // Derived from the registry rather than restated, so the spec can't
+    // claim support for a provider that has no implementation.
+    for (const id of supportedProviderIds()) {
+      expect(openApiSpec.info.description).toContain(id);
+    }
+    for (const id of PROVIDER_IDS) {
+      expect(openApiSpec.info.description).toContain(id);
+    }
   });
 
   it("documents both eligibility endpoints with the request bodies the routes actually accept", () => {

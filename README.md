@@ -100,17 +100,19 @@ format, for scraping directly instead of polling the JSON endpoint.
 { "repo": "owner/name", "token": "optional-per-request-github-token" }
 ```
 
-`repo` also accepts a full GitHub URL (`https://github.com/owner/name`) or an
-SSH URL. `token` is optional and overrides `GITHUB_TOKEN` for that request —
-useful for evaluating a private repo using the connecting user's own OAuth
-token instead of a shared server token.
+`repo` also accepts a full URL (`https://github.com/owner/name`) or an SSH
+URL, on any recognized provider (see [Providers](#providers)); bare
+`owner/name` shorthand is assumed to be GitHub. `token` is optional and
+overrides `GITHUB_TOKEN` for that request — useful for evaluating a private
+repo using the connecting user's own OAuth token instead of a shared server
+token.
 
 Response:
 
 ```json
 {
   "eligible": true,
-  "repo": { "owner": "owner", "repo": "name" },
+  "repo": { "provider": "github", "owner": "owner", "repo": "name" },
   "checks": {
     "language": { "passed": true, "primaryLanguage": "TypeScript", "reasons": [] },
     "size": { "passed": true, "totalLines": 12000, "totalFiles": 80, "reasons": [] },
@@ -166,6 +168,29 @@ the same `x-api-key` requirement as `/eligibility/*`, when `API_KEY` is
 set). Optional `?repo=owner/name` filters to one repo, and `?limit=` caps
 the result count (default 50, max 200). Results are most-recent-first.
 
+## Providers
+
+Repo references carry the provider they belong to, rather than every layer
+assuming GitHub. Two lists matter, and they're deliberately different:
+
+- **Recognized** (`src/providers/hosts.ts`): GitHub, GitLab, Bitbucket. A
+  URL on any of these parses into a `{ provider, owner, repo }` reference.
+- **Implemented** (`src/providers/registry.ts`): GitHub only. A recognized
+  but unimplemented provider is rejected with a 400 naming it, rather than
+  a parse error or a 502 that invites a pointless retry.
+
+Adding a forge means writing a `RepoProvider` — a commit-history summary
+and a push-event summary, the only two things the eligibility checks need
+from a forge — and registering it. Cloning, caching, the audit trail, and
+the checks themselves need no change: clone URLs and token placeholder
+usernames come from the host table, and cache keys and audit rows are
+already provider-scoped, so `acme/widgets` on two forges stays two
+distinct projects throughout.
+
+The push-event method is best-effort by contract: a forge without such an
+API reports `available: false`, and the activity check treats a missing
+signal as neutral rather than disqualifying.
+
 ## Known limitations
 
 - The commit-day histogram and push-event checks are heuristics, not proof:
@@ -176,6 +201,8 @@ the result count (default 50, max 200). Results are most-recent-first.
   in non-push activity, so `pushEvents.available` may be `true` with zero
   observed pushes for older or very active repos; the eligibility decision
   never depends on push-event data being present.
+- GitLab and Bitbucket URLs parse but cannot be evaluated yet — only the
+  seam exists, not an implementation.
 - The size/line-count check counts raw lines (including blank lines and
   comments) in files under the five eligible languages' extensions.
 
