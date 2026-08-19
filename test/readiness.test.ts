@@ -13,8 +13,7 @@ vi.mock("../src/history/createHistoryStore", () => ({
   createHistoryStore: () => ({
     ping: historyPing,
     record: vi.fn(),
-    listRecent: () => [],
-    listForRepo: () => []
+    list: () => []
   })
 }));
 

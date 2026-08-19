@@ -152,7 +152,7 @@ describe("toPostmanCollection", () => {
 
   it("imports query parameters disabled, so they document without applying", () => {
     const query = itemFor("{{baseUrl}}/admin/evaluations").request.url.query ?? [];
-    expect(query.map((q) => q.key)).toEqual(["repo", "limit"]);
+    expect(query.map((q) => q.key)).toEqual(["repo", "eligible", "since", "until", "limit"]);
     expect(query.every((q) => q.disabled)).toBe(true);
     expect(query.find((q) => q.key === "limit")?.value).toBe("50");
   });

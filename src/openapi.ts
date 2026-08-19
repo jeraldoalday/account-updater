@@ -179,8 +179,8 @@ export const openApiSpec = {
         summary: "Read-only view of the evaluation audit trail",
         description:
           "Lists past evaluations from the SQLite audit trail, most recent first. " +
-          "Filter to one repo with `repo`, and cap the result count with `limit` " +
-          "(default 50, max 200).",
+          "Filters combine: `repo` for one repo, `eligible` for outcome, `since`/`until` " +
+          "for a time window, and `limit` to cap the result count (default 50, max 200).",
         parameters: [
           {
             name: "repo",
@@ -191,6 +191,30 @@ export const openApiSpec = {
               '"owner/name" or a repo URL - when omitted, lists the most recent ' +
               "evaluations across all repos. Filtering is scoped to the reference's " +
               "provider as well as its owner/repo."
+          },
+          {
+            name: "eligible",
+            in: "query",
+            required: false,
+            schema: { type: "boolean" },
+            description:
+              "Restrict to evaluations that passed (true) or failed (false). Omit for both."
+          },
+          {
+            name: "since",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+            description:
+              "Inclusive lower bound on when the evaluation happened, as an ISO-8601 " +
+              "timestamp. An unparseable value is a 400, not an empty result."
+          },
+          {
+            name: "until",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+            description: "Inclusive upper bound, same format as `since`."
           },
           {
             name: "limit",

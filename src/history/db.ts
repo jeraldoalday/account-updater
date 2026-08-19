@@ -57,6 +57,10 @@ export function openHistoryDb(path: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_evaluations_owner_repo ON evaluations (owner, repo);
     CREATE INDEX IF NOT EXISTS idx_evaluations_provider_owner_repo
       ON evaluations (provider, owner, repo);
+    -- Every admin query orders by evaluated_at DESC, and the unfiltered
+    -- "most recent evaluations" case has no other index to lean on.
+    CREATE INDEX IF NOT EXISTS idx_evaluations_evaluated_at
+      ON evaluations (evaluated_at DESC);
   `);
 
   return db;

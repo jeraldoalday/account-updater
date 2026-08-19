@@ -35,7 +35,7 @@ describe("createHistoryStore", () => {
       reasons: []
     });
 
-    expect(store.listForRepo({ provider: "github", owner: "o", repo: "r" })).toHaveLength(1);
+    expect(store.list({ ref: { provider: "github", owner: "o", repo: "r" } })).toHaveLength(1);
   });
 
   it("reuses the same underlying connection across multiple createHistoryStore() calls", async () => {
@@ -49,7 +49,7 @@ describe("createHistoryStore", () => {
     });
 
     expect(
-      createHistoryStore().listForRepo({ provider: "github", owner: "o", repo: "r" })
+      createHistoryStore().list({ ref: { provider: "github", owner: "o", repo: "r" } })
     ).toHaveLength(1);
   });
 
@@ -74,7 +74,7 @@ describe("createHistoryStore", () => {
       // A fresh store reopens the (still on-disk) file rather than throwing
       // on a closed connection.
       const store = createHistoryStore();
-      expect(store.listForRepo({ provider: "github", owner: "o", repo: "r" })).toHaveLength(1);
+      expect(store.list({ ref: { provider: "github", owner: "o", repo: "r" } })).toHaveLength(1);
     });
   });
 });

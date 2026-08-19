@@ -200,8 +200,16 @@ answerable later rather than only visible as a live snapshot.
 
 `GET /admin/evaluations` reads that audit trail back over the API (gated by
 the same `x-api-key` requirement as `/eligibility/*`, when `API_KEY` is
-set). Optional `?repo=owner/name` filters to one repo, and `?limit=` caps
-the result count (default 50, max 200). Results are most-recent-first.
+set). Results are most-recent-first, and the filters combine:
+`?repo=owner/name` for one repo, `?eligible=true|false` for outcome,
+`?since=`/`?until=` for an ISO-8601 time window, and `?limit=` to cap the
+result count (default 50, max 200). A mistyped filter value is a 400
+rather than an empty list, since "nothing matched" and "your query was
+wrong" are different answers.
+
+```bash
+curl -s 'localhost:3000/admin/evaluations?eligible=false&since=2026-08-01T00:00:00Z' | jq
+```
 
 ## Providers
 

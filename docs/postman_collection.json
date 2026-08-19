@@ -219,13 +219,31 @@
                   "disabled": true
                 },
                 {
+                  "key": "eligible",
+                  "value": "true",
+                  "description": "Restrict to evaluations that passed (true) or failed (false). Omit for both.",
+                  "disabled": true
+                },
+                {
+                  "key": "since",
+                  "value": "<date-time>",
+                  "description": "Inclusive lower bound on when the evaluation happened, as an ISO-8601 timestamp. An unparseable value is a 400, not an empty result.",
+                  "disabled": true
+                },
+                {
+                  "key": "until",
+                  "value": "<date-time>",
+                  "description": "Inclusive upper bound, same format as `since`.",
+                  "disabled": true
+                },
+                {
                   "key": "limit",
                   "value": "50",
                   "disabled": true
                 }
               ]
             },
-            "description": "Lists past evaluations from the SQLite audit trail, most recent first. Filter to one repo with `repo`, and cap the result count with `limit` (default 50, max 200)."
+            "description": "Lists past evaluations from the SQLite audit trail, most recent first. Filters combine: `repo` for one repo, `eligible` for outcome, `since`/`until` for a time window, and `limit` to cap the result count (default 50, max 200)."
           }
         }
       ]

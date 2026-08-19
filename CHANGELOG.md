@@ -25,7 +25,8 @@ unreleased.
   with bounded concurrency. Always answers 200; per-entry failures are
   reported inside the response.
 - `GET /admin/evaluations` — read-only view of the SQLite audit trail,
-  filterable by repo and capped by `limit` (default 50, max 200).
+  with combinable filters: `repo`, `eligible`, a `since`/`until` time
+  window, and `limit` (default 50, max 200).
 - `GET /health` (liveness), `GET /ready` (readiness: reports 503 when the
   cache backend or audit-trail database is unusable), `GET /metrics` (JSON
   counters), `GET /metrics/prometheus` (the same counters in Prometheus's

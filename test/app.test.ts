@@ -3,8 +3,7 @@ import request from "supertest";
 import { UnsupportedProviderError } from "../src/providers/provider";
 
 const evaluateEligibility = vi.fn();
-const listRecent = vi.fn();
-const listForRepo = vi.fn();
+const listEvaluations = vi.fn();
 
 vi.mock("../src/eligibility/evaluate", () => ({
   evaluateEligibility: (...args: unknown[]) => evaluateEligibility(...args)
@@ -12,8 +11,7 @@ vi.mock("../src/eligibility/evaluate", () => ({
 
 vi.mock("../src/history/createHistoryStore", () => ({
   createHistoryStore: () => ({
-    listRecent: (...args: unknown[]) => listRecent(...args),
-    listForRepo: (...args: unknown[]) => listForRepo(...args),
+    list: (...args: unknown[]) => listEvaluations(...args),
     record: vi.fn()
   })
 }));
@@ -24,8 +22,7 @@ const { createApp } = await import("../src/app");
 describe("app", () => {
   beforeEach(() => {
     evaluateEligibility.mockReset();
-    listRecent.mockReset();
-    listForRepo.mockReset();
+    listEvaluations.mockReset().mockReturnValue([]);
   });
 
   it("GET /health returns ok with version and uptime", async () => {
@@ -253,45 +250,86 @@ describe("app", () => {
   });
 
   describe("GET /admin/evaluations", () => {
+    const record = {
+      id: 1,
+      repo: { provider: "github", owner: "o", repo: "r" },
+      evaluatedAt: "2026-01-01T00:00:00Z",
+      eligible: true,
+      reasons: []
+    };
+
     it("lists recent evaluations across all repos by default", async () => {
-      const record = {
-        id: 1,
-        repo: { provider: "github", owner: "o", repo: "r" },
-        evaluatedAt: "2026-01-01T00:00:00Z",
-        eligible: true,
-        reasons: []
-      };
-      listRecent.mockReturnValue([record]);
+      listEvaluations.mockReturnValue([record]);
 
       const res = await request(createApp()).get("/admin/evaluations");
 
       expect(res.status).toBe(200);
       expect(res.body.evaluations).toEqual([record]);
-      expect(listRecent).toHaveBeenCalledWith(50);
-      expect(listForRepo).not.toHaveBeenCalled();
+      expect(listEvaluations).toHaveBeenCalledWith({ limit: 50 });
     });
 
     it("filters to one repo when ?repo= is given", async () => {
-      listForRepo.mockReturnValue([]);
-
       const res = await request(createApp()).get("/admin/evaluations").query({ repo: "o/r" });
 
       expect(res.status).toBe(200);
-      expect(listForRepo).toHaveBeenCalledWith({ provider: "github", owner: "o", repo: "r" }, 50);
+      expect(listEvaluations).toHaveBeenCalledWith({
+        ref: { provider: "github", owner: "o", repo: "r" },
+        limit: 50
+      });
     });
 
     it("respects a custom limit", async () => {
-      listRecent.mockReturnValue([]);
-
       await request(createApp()).get("/admin/evaluations").query({ limit: "5" });
 
-      expect(listRecent).toHaveBeenCalledWith(5);
+      expect(listEvaluations).toHaveBeenCalledWith({ limit: 5 });
+    });
+
+    it("filters by outcome when ?eligible= is given", async () => {
+      await request(createApp()).get("/admin/evaluations").query({ eligible: "false" });
+
+      expect(listEvaluations).toHaveBeenCalledWith({ eligible: false, limit: 50 });
+    });
+
+    it("filters by a time window, and combines it with the other filters", async () => {
+      await request(createApp()).get("/admin/evaluations").query({
+        repo: "o/r",
+        eligible: "true",
+        since: "2026-08-01T00:00:00Z",
+        until: "2026-08-20T00:00:00Z",
+        limit: "10"
+      });
+
+      expect(listEvaluations).toHaveBeenCalledWith({
+        ref: { provider: "github", owner: "o", repo: "r" },
+        eligible: true,
+        since: "2026-08-01T00:00:00Z",
+        until: "2026-08-20T00:00:00Z",
+        limit: 10
+      });
+    });
+
+    it("rejects an unparseable timestamp instead of quietly matching nothing", async () => {
+      // A filter the caller mistyped should say so - an empty list reads
+      // as "nothing happened", which is a different and wrong answer.
+      const res = await request(createApp())
+        .get("/admin/evaluations")
+        .query({ since: "last tuesday" });
+
+      expect(res.status).toBe(400);
+      expect(listEvaluations).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-boolean eligible value", async () => {
+      const res = await request(createApp()).get("/admin/evaluations").query({ eligible: "yes" });
+
+      expect(res.status).toBe(400);
+      expect(listEvaluations).not.toHaveBeenCalled();
     });
 
     it("rejects a limit over the 200 cap", async () => {
       const res = await request(createApp()).get("/admin/evaluations").query({ limit: "500" });
       expect(res.status).toBe(400);
-      expect(listRecent).not.toHaveBeenCalled();
+      expect(listEvaluations).not.toHaveBeenCalled();
     });
 
     it("rejects an unparseable repo query param", async () => {
@@ -299,7 +337,7 @@ describe("app", () => {
         .get("/admin/evaluations")
         .query({ repo: "not a repo" });
       expect(res.status).toBe(400);
-      expect(listForRepo).not.toHaveBeenCalled();
+      expect(listEvaluations).not.toHaveBeenCalled();
     });
   });
 });

@@ -6,8 +6,17 @@ import { createHistoryStore } from "../history/createHistoryStore";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
+// Express gives query values as strings, so booleans and timestamps are
+// parsed here rather than trusted: an unparseable `since` must be a 400,
+// not a filter that silently matches nothing.
 const querySchema = z.object({
   repo: z.string().min(1).optional(),
+  eligible: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+  since: z.string().datetime({ offset: true }).optional(),
+  until: z.string().datetime({ offset: true }).optional(),
   limit: z.coerce.number().int().positive().max(MAX_LIMIT).optional()
 });
 
@@ -24,20 +33,25 @@ adminRouter.get("/evaluations", (req, res) => {
     return;
   }
 
-  const limit = parsed.data.limit ?? DEFAULT_LIMIT;
-  const historyStore = createHistoryStore();
+  const { repo, eligible, since, until } = parsed.data;
 
-  if (parsed.data.repo) {
-    let ref;
+  let ref;
+  if (repo !== undefined) {
     try {
-      ref = parseRepoRef(parsed.data.repo);
+      ref = parseRepoRef(repo);
     } catch (err) {
       res.status(400).json({ error: (err as Error).message });
       return;
     }
-    res.status(200).json({ evaluations: historyStore.listForRepo(ref, limit) });
-    return;
   }
 
-  res.status(200).json({ evaluations: historyStore.listRecent(limit) });
+  const evaluations = createHistoryStore().list({
+    ...(ref ? { ref } : {}),
+    ...(eligible !== undefined ? { eligible } : {}),
+    ...(since !== undefined ? { since } : {}),
+    ...(until !== undefined ? { until } : {}),
+    limit: parsed.data.limit ?? DEFAULT_LIMIT
+  });
+
+  res.status(200).json({ evaluations });
 });

@@ -5,7 +5,7 @@ import { openApiSpec } from "../src/openapi";
 // The history store opens SQLite on import of the admin route; stub it so
 // this test only cares about the routing table.
 vi.mock("../src/history/createHistoryStore", () => ({
-  createHistoryStore: () => ({ listRecent: () => [], listForRepo: () => [], record: () => {} })
+  createHistoryStore: () => ({ list: () => [], record: () => {} })
 }));
 
 const { createApp } = await import("../src/app");
