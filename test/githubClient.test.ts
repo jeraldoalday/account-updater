@@ -45,7 +45,11 @@ describe("GitHubClient.getCommitHistorySummary", () => {
         return commitsPage(["2026-01-01T00:00:00Z"]);
       }
       if (per_page === 100 && page === 1) {
-        return commitsPage(["2026-01-20T00:00:00Z", "2026-01-10T00:00:00Z", "2026-01-01T00:00:00Z"]);
+        return commitsPage([
+          "2026-01-20T00:00:00Z",
+          "2026-01-10T00:00:00Z",
+          "2026-01-01T00:00:00Z"
+        ]);
       }
       throw new Error(`unexpected listCommits call: ${JSON.stringify({ per_page, page })}`);
     });
@@ -61,7 +65,10 @@ describe("GitHubClient.getCommitHistorySummary", () => {
   });
 
   it("paginates the commit sample across multiple 100-commit pages", async () => {
-    const page1Dates = Array.from({ length: 100 }, (_, i) => `2026-01-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`);
+    const page1Dates = Array.from(
+      { length: 100 },
+      (_, i) => `2026-01-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`
+    );
     const page2Dates = ["2025-12-15T00:00:00Z", "2025-12-01T00:00:00Z"];
 
     listCommits.mockImplementation(({ per_page, page }: { per_page: number; page: number }) => {
@@ -186,5 +193,85 @@ describe("GitHubClient.getPushEventSummary", () => {
     const summary = await client.getPushEventSummary(ref);
 
     expect(summary.available).toBe(false);
+  });
+});
+
+describe("GitHubClient with malformed commit data", () => {
+  const ref = { provider: "github" as const, owner: "octocat", repo: "hello-world" };
+
+  beforeEach(() => {
+    listCommits.mockReset();
+  });
+
+  it("reports a zero span, not NaN, when commit dates are unparseable", async () => {
+    // A commit's author date is client-supplied metadata, so it can be
+    // anything. Before this was guarded, an unparseable date produced
+    // historyDays: NaN, which satisfied the minimum-span check because
+    // every comparison against NaN is false.
+    listCommits.mockImplementation(({ per_page, page }: { per_page: number; page: number }) => {
+      if (per_page === 1 && page === 1) {
+        return commitsPage(["not-a-date"], { link: linkHeader(2) });
+      }
+      if (per_page === 1 && page === 2) {
+        return commitsPage(["also-garbage"]);
+      }
+      return commitsPage(["not-a-date", "also-garbage"]);
+    });
+
+    const summary = await new GitHubClient(undefined).getCommitHistorySummary(ref);
+
+    expect(summary.historyDays).toBe(0);
+    expect(Number.isNaN(summary.historyDays)).toBe(false);
+    // Unparseable timestamps are reported as absent rather than echoed
+    // back as if they were real dates.
+    expect(summary.firstCommitDate).toBeNull();
+    expect(summary.lastCommitDate).toBeNull();
+    expect(summary.distinctCommitDays).toBe(0);
+  });
+
+  it("tolerates commits with no author object at all", async () => {
+    listCommits.mockImplementation(() => ({
+      headers: {},
+      data: [{ author: null, commit: { author: null, message: "" } }]
+    }));
+
+    const summary = await new GitHubClient(undefined).getCommitHistorySummary(ref);
+
+    expect(summary.commitCount).toBe(1);
+    expect(summary.firstCommitDate).toBeNull();
+    expect(summary.historyDays).toBe(0);
+    expect(summary.authorStats.distinctAuthors).toBe(0);
+  });
+
+  it("handles an empty repo with no commits at all", async () => {
+    listCommits.mockImplementation(() => ({ headers: {}, data: [] }));
+
+    const summary = await new GitHubClient(undefined).getCommitHistorySummary(ref);
+
+    expect(summary.commitCount).toBe(0);
+    expect(summary.historyDays).toBe(0);
+    expect(summary.maxSingleDayCommitShare).toBe(0);
+    expect(summary.truncated).toBe(false);
+  });
+
+  it("ignores push events whose payload carries no commit count", async () => {
+    listRepoEvents.mockImplementation(({ page }: { page: number }) =>
+      page === 1
+        ? {
+            data: [
+              { type: "PushEvent", created_at: "2026-01-10T00:00:00Z", payload: {} },
+              { type: "PushEvent", created_at: null, payload: { distinct_size: 3 } }
+            ]
+          }
+        : { data: [] }
+    );
+
+    const summary = await new GitHubClient(undefined).getPushEventSummary(ref);
+
+    expect(summary.available).toBe(true);
+    // The first event contributes a day but no commits; the second
+    // contributes commits but has no usable timestamp.
+    expect(summary.distinctPushDays).toBe(1);
+    expect(summary.maxSinglePushCommitShare).toBe(1);
   });
 });

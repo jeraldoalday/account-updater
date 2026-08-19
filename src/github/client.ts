@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 import type { CommitHistorySummary, PushEventSummary, RepoRef } from "../types";
 import { withRetry } from "./withRetry";
 import { summarizeCommitSample, type SampledCommit } from "../analysis/commitSample";
+import { historySpanDays, sanitizeCommitDate } from "../analysis/commitDates";
 import { resolveOctokitAuth } from "./octokitAuth";
 import { config } from "../config";
 
@@ -45,7 +46,10 @@ export class GitHubClient {
     );
     const totalFromLink = parseLastPage(firstPageResp.headers.link as string | undefined);
     const commitCount = totalFromLink ?? firstPageResp.data.length;
-    const lastCommitDate = firstPageResp.data[0]?.commit?.author?.date ?? null;
+    // Sanitized rather than passed through: a commit can carry an
+    // unparseable author date, and the checks downstream must not receive
+    // one dressed up as a real timestamp.
+    const lastCommitDate = sanitizeCommitDate(firstPageResp.data[0]?.commit?.author?.date);
 
     // The oldest-commit lookup and the sample pages below are all
     // independent GitHub calls once `commitCount` is known - fire them
@@ -54,7 +58,10 @@ export class GitHubClient {
     // sequentially just to detect "ran out of pages" (a `# < 100` page still
     // happens if the true count changes between calls, e.g. new commits
     // landing mid-check; the sample simply reflects what came back).
-    const pagesToFetch = Math.max(Math.min(Math.ceil(commitCount / 100), COMMIT_SAMPLE_CAP / 100), 1);
+    const pagesToFetch = Math.max(
+      Math.min(Math.ceil(commitCount / 100), COMMIT_SAMPLE_CAP / 100),
+      1
+    );
 
     const [oldestPageResp, ...pageResps] = await Promise.all([
       totalFromLink
@@ -63,11 +70,14 @@ export class GitHubClient {
           )
         : null,
       ...Array.from({ length: pagesToFetch }, (_, i) =>
-        withRetry(() => this.octokit.rest.repos.listCommits({ owner, repo, per_page: 100, page: i + 1 }))
+        withRetry(() =>
+          this.octokit.rest.repos.listCommits({ owner, repo, per_page: 100, page: i + 1 })
+        )
       )
     ]);
 
-    const firstCommitDate = oldestPageResp?.data[0]?.commit?.author?.date ?? lastCommitDate;
+    const firstCommitDate =
+      sanitizeCommitDate(oldestPageResp?.data[0]?.commit?.author?.date) ?? lastCommitDate;
 
     // Sample recent commits to build the day/author/message distributions
     // used by the active-development heuristics. Bounded so huge repos stay
@@ -88,16 +98,7 @@ export class GitHubClient {
     const { commitsByDay, distinctCommitDays, maxSingleDayCommitShare, authorStats, messageStats } =
       summarizeCommitSample(sample);
 
-    const historyDays =
-      firstCommitDate && lastCommitDate
-        ? Math.max(
-            0,
-            Math.round(
-              (new Date(lastCommitDate).getTime() - new Date(firstCommitDate).getTime()) /
-                (1000 * 60 * 60 * 24)
-            )
-          )
-        : 0;
+    const historyDays = historySpanDays(firstCommitDate, lastCommitDate);
 
     return {
       commitCount,

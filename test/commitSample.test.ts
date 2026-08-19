@@ -56,3 +56,33 @@ describe("summarizeCommitSample", () => {
     expect(summary.messageStats.distinctMessageRatio).toBe(0.5);
   });
 });
+
+describe("summarizeCommitSample with malformed commit data", () => {
+  it("ignores commits whose date is unparseable instead of counting each as its own day", () => {
+    // Otherwise a bulk push with garbage timestamps would look like it was
+    // spread across many distinct days, which is exactly what the
+    // organic-development score rewards.
+    const summary = summarizeCommitSample([
+      { date: "2026-01-01T00:00:00Z", authorKey: "a", message: "real work" },
+      { date: "garbage-1", authorKey: "a", message: "junk" },
+      { date: "garbage-2", authorKey: "a", message: "junk" },
+      { date: "garbage-3", authorKey: "a", message: "junk" }
+    ]);
+
+    expect(summary.sampled).toBe(1);
+    expect(summary.distinctCommitDays).toBe(1);
+    expect(summary.commitsByDay).toEqual({ "2026-01-01": 1 });
+    expect(summary.maxSingleDayCommitShare).toBe(1);
+  });
+
+  it("returns zeroed day stats when every commit date is unparseable", () => {
+    const summary = summarizeCommitSample([
+      { date: "nope", authorKey: "a", message: "x" },
+      { date: null, authorKey: "a", message: "y" }
+    ]);
+
+    expect(summary.sampled).toBe(0);
+    expect(summary.distinctCommitDays).toBe(0);
+    expect(summary.maxSingleDayCommitShare).toBe(0);
+  });
+});

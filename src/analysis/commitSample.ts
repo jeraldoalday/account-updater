@@ -1,3 +1,4 @@
+import { parseCommitDate } from "./commitDates";
 import { summarizeCommitMessages } from "./commitMessagePatterns";
 
 export interface SampledCommit {
@@ -54,7 +55,10 @@ export function summarizeCommitSample(commits: readonly SampledCommit[]): Commit
   let sampled = 0;
 
   for (const commit of commits) {
-    if (!commit.date) continue;
+    // Skip unparseable dates rather than bucketing them: dayKey() would
+    // turn each distinct piece of garbage into its own "day", inflating the
+    // distinct-day count that the organic-development score rewards.
+    if (!commit.date || !parseCommitDate(commit.date)) continue;
     const key = dayKey(commit.date);
     commitsByDay[key] = (commitsByDay[key] ?? 0) + 1;
     sampled++;
