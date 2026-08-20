@@ -67,6 +67,10 @@ unreleased.
 - `SHUTDOWN_DRAIN_MS` / `SHUTDOWN_GRACE_MS` to pace shutdown: how long to
   keep serving while reporting not-ready, and the hard deadline for the
   whole shutdown.
+- `npm run smoke`, a post-deploy check that drives a running instance end
+  to end over HTTP against real public repos — liveness, readiness, spec,
+  an eligibility check per repo, a rejected reference, and the audit trail
+  recording the checks just made. Exits non-zero if any of them fail.
 - `npm run doctor`, a pre-deploy review of the configuration the current
   environment would start the service with: missing API key or GitHub
   credential (critical, exits non-zero), a per-process cache behind a load

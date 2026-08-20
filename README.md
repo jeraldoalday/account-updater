@@ -66,6 +66,17 @@ docker run --rm -p 3000:3000 --env-file .env account-updater
 or `docker compose up` (reads `.env`; the image reports its own health via
 `docker ps` / `HEALTHCHECK`, polling `GET /health`).
 
+After deploying, `npm run smoke -- --url https://your-instance` drives the
+running service end to end against real public repos: liveness, readiness,
+the spec, an eligibility check per repo, a rejected reference, and the
+audit trail having recorded the checks it just made. The unit and
+integration suites run against fakes on purpose, so they pass whether or
+not the deployed service can shell out to `git`, reach GitHub, or write
+its database — this is the check that covers that gap. It asserts the
+_shape_ of each result rather than a verdict, since whether a given public
+repo is eligible today is GitHub's business and the thresholds'. `--url`
+and `--api-key` default to `SMOKE_URL` / `SMOKE_API_KEY`.
+
 Before deploying, `npm run doctor` reviews the configuration the current
 environment would start the service with, without starting it: no API key
 on an endpoint that clones arbitrary repos, no GitHub credential (60
