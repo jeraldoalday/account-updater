@@ -130,3 +130,25 @@ checks, the clone path, and the HTTP layer are already provider-agnostic.
 `src/providers/hosts.ts` already knows how to parse GitLab and Bitbucket
 URLs, so those refs currently parse and then get a precise "not supported
 yet" 400.
+
+## Cutting a release
+
+Versions are semantic and the changelog is the release notes, so the two
+move together:
+
+1. Decide the number from what changed: a new endpoint or setting is a
+   minor, a change to an existing response shape or a default that moves
+   verdicts is a major, a fix that nobody has to react to is a patch.
+2. Move the `## [Unreleased]` heading to `## [x.y.z] - YYYY-MM-DD` and open
+   a fresh `## [Unreleased]` above it if there is anything left in flight.
+   `test/changelog.test.ts` fails on a version bump with nowhere for its
+   entries to live, on a release without a date, and on releases listed out
+   of order.
+3. Bump `version` in `package.json`. It's read at runtime by
+   `src/version.ts` and surfaces in `GET /health` and the OpenAPI spec, so
+   `npm run collection` needs re-running and the regenerated collection
+   committed.
+4. Run the full set — `npm test`, `npm run typecheck`, `npm run lint`,
+   `npm run format:check`, `npm run build` — then tag: `git tag -a vx.y.z`.
+5. After deploying, `npm run smoke -- --url <instance>`. It is the only
+   check that exercises the deployed thing rather than a fake of it.

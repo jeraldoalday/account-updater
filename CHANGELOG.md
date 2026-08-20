@@ -9,12 +9,23 @@ request/response shapes, configuration, defaults, and behaviour under
 failure. Internal refactors, test-only work, and tooling changes belong in
 the commit log, not here.
 
-This file started partway through the project's life, so the entries below
-were reconstructed from the commit history rather than written as the work
-landed. Version `0.1.0` has never been tagged — everything to date is
-unreleased.
+This file started partway through the project's life, so the 1.0.0 entries
+below were reconstructed from the commit history rather than written as the
+work landed. Everything after that release is written as it lands.
 
-## [Unreleased]
+## [1.0.0] - 2026-08-20
+
+First tagged release. The service has been feature-complete for its
+purpose for a while; this marks the point where the operational side
+caught up — draining shutdown, audit-trail retention, a pre-deploy
+configuration review, and a post-deploy smoke test against a running
+instance — and the API stopped changing shape under callers.
+
+Thresholds and weights in `src/eligibility/thresholds.ts` ship as they
+are: they were calibrated by hand rather than against a labelled corpus,
+so they are a considered starting point, not a tuned one. Changing them
+changes verdicts, which is why they are a documented, single-file
+decision rather than something scattered across the checks.
 
 ### Added
 
