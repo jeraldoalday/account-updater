@@ -340,4 +340,13 @@ describe("app", () => {
       expect(listEvaluations).not.toHaveBeenCalled();
     });
   });
+  it("rate-limits /admin too, and reports the budget on the response", async () => {
+    // The admin read is cheap next to a clone, but it is still a database
+    // scan behind an API key that is optional to configure.
+    const res = await request(createApp()).get("/admin/evaluations");
+
+    expect(res.status).toBe(200);
+    expect(res.headers["x-ratelimit-limit"]).toBeDefined();
+    expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
+  });
 });

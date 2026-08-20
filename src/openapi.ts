@@ -309,7 +309,11 @@ export const openApiSpec = {
         type: "apiKey",
         in: "header",
         name: "x-api-key",
-        description: "Required on /eligibility/* only when the server has API_KEY configured."
+        description:
+          "Required on /eligibility/* and /admin/* only when the server has API_KEY " +
+          "configured. Both are rate-limited either way, each with its own budget, and " +
+          "every response carries X-RateLimit-Limit, X-RateLimit-Remaining, and " +
+          "X-RateLimit-Reset (unix seconds) so a caller can pace itself before it is refused."
       }
     },
     schemas: {

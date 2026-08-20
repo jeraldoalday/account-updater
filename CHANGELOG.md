@@ -85,6 +85,11 @@ unreleased.
 
 ### Changed
 
+- Every rate-limited response carries `X-RateLimit-Limit`,
+  `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (unix seconds), not just
+  the 429, so a caller can pace itself before it is refused.
+- `/admin/*` is rate-limited on the same settings as `/eligibility/*`, with
+  its own separate budget.
 - The active-development check is a weighted blend of four signals (day
   spread, push-event bulk delivery, commit-message variety, contributor
   diversity) scored against one threshold, rather than four independent

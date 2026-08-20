@@ -74,7 +74,20 @@ export function createApp() {
     eligibilityRouter
   );
 
-  app.use("/admin", apiKeyAuth(config.apiKey), adminRouter);
+  // Its own budget rather than a share of /eligibility's: an admin read is
+  // cheap next to a clone, so hammering it shouldn't spend the expensive
+  // endpoint's allowance - but it is still a database scan behind an API
+  // key that is optional, so it can't be unlimited either.
+  app.use(
+    "/admin",
+    rateLimit({
+      windowMs: config.rateLimitWindowMs,
+      max: config.rateLimitMax,
+      trustedApiKey: config.apiKey
+    }),
+    apiKeyAuth(config.apiKey),
+    adminRouter
+  );
 
   // After every route, before the error handler: anything that reached
   // here matched nothing.

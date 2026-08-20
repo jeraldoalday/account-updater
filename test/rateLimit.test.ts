@@ -148,4 +148,38 @@ describe("sweepExpiredWindows", () => {
 
     expect(windows.size).toBe(0);
   });
+  it("reports the budget on a successful response, not only on a refusal", async () => {
+    // A caller can only pace itself if it can see the remaining budget
+    // before it runs out.
+    const app = appWith(60_000, 5);
+
+    const res = await request(app).get("/ping");
+
+    expect(res.status).toBe(200);
+    expect(res.headers["x-ratelimit-limit"]).toBe("5");
+    expect(res.headers["x-ratelimit-remaining"]).toBe("4");
+    expect(Number(res.headers["x-ratelimit-reset"])).toBeGreaterThan(Date.now() / 1000);
+  });
+
+  it("counts the remaining budget down across requests", async () => {
+    const app = appWith(60_000, 3);
+
+    const first = await request(app).get("/ping");
+    const second = await request(app).get("/ping");
+
+    expect(first.headers["x-ratelimit-remaining"]).toBe("2");
+    expect(second.headers["x-ratelimit-remaining"]).toBe("1");
+  });
+
+  it("never reports a negative remaining budget once over the limit", async () => {
+    const app = appWith(60_000, 1);
+
+    await request(app).get("/ping");
+    await request(app).get("/ping");
+    const third = await request(app).get("/ping");
+
+    expect(third.status).toBe(429);
+    expect(third.headers["x-ratelimit-remaining"]).toBe("0");
+    expect(third.headers["retry-after"]).toBeDefined();
+  });
 });

@@ -109,7 +109,12 @@ local development.
 `/eligibility/*` is also rate-limited (20 requests per 60-second window by
 default — see `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`), since each
 request clones a repo and calls the GitHub API. Requests over the limit
-get a 429 with a `Retry-After` header. A caller presenting the configured
+get a 429 with a `Retry-After` header. Every response — not just the 429 —
+carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
+`X-RateLimit-Reset` (unix seconds), so a caller can pace itself instead of
+discovering the limit by being refused. `/admin/*` is limited on the same
+settings but with its own budget: an admin read is cheap next to a clone,
+so hammering it shouldn't spend the expensive endpoint's allowance. A caller presenting the configured
 `API_KEY` gets its own budget; everyone else is limited per remote IP. An
 `x-api-key` header that doesn't match the configured key is ignored for
 bucketing, so a caller can't rotate the header to escape the limit.

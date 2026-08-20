@@ -85,6 +85,17 @@ export function rateLimit(options: RateLimitOptions): RequestHandler {
 
     window.count++;
 
+    // On every response, not just the 429: a caller can only pace itself
+    // if it can see how much budget is left *before* it runs out. Learning
+    // the limit exists by being refused is what turns a client into one
+    // that retries in a tight loop.
+    res.setHeader("X-RateLimit-Limit", String(options.max));
+    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, options.max - window.count)));
+    // Unix seconds, matching the convention GitHub's own rate-limit
+    // headers use - which is what most callers of this service are already
+    // parsing.
+    res.setHeader("X-RateLimit-Reset", String(Math.ceil(window.resetAt / 1000)));
+
     if (window.count > options.max) {
       const retryAfterSeconds = Math.ceil((window.resetAt - now) / 1000);
       res.setHeader("Retry-After", String(retryAfterSeconds));
