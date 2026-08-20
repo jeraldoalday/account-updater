@@ -284,6 +284,9 @@ signal as neutral rather than disqualifying.
 - [`docs/architecture.md`](docs/architecture.md) — request lifecycle,
   module map, extension seams, trust boundaries, and which failures the
   service survives on purpose.
+- [`docs/operations.md`](docs/operations.md) — running it somewhere real:
+  what to set before the first deploy, what the two probes mean, what a
+  restart does, what to watch, and what the common failures look like.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, the checks to run before
   pushing, commit-message style, and the invariants a change has to keep.
 - [`CHANGELOG.md`](CHANGELOG.md) — what a caller or operator would notice
