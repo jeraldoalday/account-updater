@@ -4,10 +4,29 @@ import { config } from "./config";
 import { closeCache } from "./cache/createCache";
 import { closeHistoryStore, createHistoryStore } from "./history/createHistoryStore";
 import { startRetentionSweeper } from "./history/retention";
+import { auditConfig } from "./health/configAudit";
 import { gracefulShutdown } from "./lifecycle/gracefulShutdown";
 
 function log(event: Record<string, unknown>): void {
   console.log(JSON.stringify({ level: "info", ...event, time: new Date().toISOString() }));
+}
+
+// Surfaced at boot, not just from `npm run doctor`: the settings that are
+// fine locally and wrong in production (no API key, no GitHub credential,
+// an audit trail in a temp directory) are exactly the ones nobody thinks
+// to review before the first deploy.
+for (const finding of auditConfig(config)) {
+  if (finding.severity === "info") continue;
+  console.warn(
+    JSON.stringify({
+      level: finding.severity === "critical" ? "error" : "warn",
+      msg: "config_review",
+      id: finding.id,
+      detail: finding.message,
+      remedy: finding.remedy,
+      time: new Date().toISOString()
+    })
+  );
 }
 
 const app = createApp();

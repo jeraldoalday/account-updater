@@ -11,6 +11,7 @@
     "stats": "npm run build --silent && node dist/cli/stats.js",
     "loadtest": "npm run build --silent && node dist/cli/loadtest.js",
     "collection": "npm run build --silent && node dist/cli/genCollection.js",
+    "doctor": "npm run build --silent && node dist/cli/doctor.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",

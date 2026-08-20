@@ -67,6 +67,13 @@ unreleased.
 - `SHUTDOWN_DRAIN_MS` / `SHUTDOWN_GRACE_MS` to pace shutdown: how long to
   keep serving while reporting not-ready, and the hard deadline for the
   whole shutdown.
+- `npm run doctor`, a pre-deploy review of the configuration the current
+  environment would start the service with: missing API key or GitHub
+  credential (critical, exits non-zero), a per-process cache behind a load
+  balancer, an audit trail under `/tmp`, retention disabled, no shutdown
+  drain window, or a rate limit that allows more clones than a host will
+  like. The same review runs at startup and logs anything above
+  informational.
 - Developer tooling: a local self-check CLI (`npm run stats`), a load-test
   tool for the rate limiter and cache under concurrency
   (`npm run loadtest`), and a Postman/Insomnia collection generated from

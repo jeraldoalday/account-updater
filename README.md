@@ -66,6 +66,16 @@ docker run --rm -p 3000:3000 --env-file .env account-updater
 or `docker compose up` (reads `.env`; the image reports its own health via
 `docker ps` / `HEALTHCHECK`, polling `GET /health`).
 
+Before deploying, `npm run doctor` reviews the configuration the current
+environment would start the service with, without starting it: no API key
+on an endpoint that clones arbitrary repos, no GitHub credential (60
+unauthenticated requests an hour), an audit trail written under `/tmp`,
+retention disabled, a shutdown with no drain window. It exits non-zero on
+a critical finding, so a release pipeline can gate on it; warnings and
+notes are printed but don't fail the run, since several of them are
+reasonable choices for a single-instance deployment. The same review runs
+at startup and logs anything above informational.
+
 ## API
 
 The full API is described by an OpenAPI 3.0 document served at
