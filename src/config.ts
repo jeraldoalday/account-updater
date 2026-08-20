@@ -37,6 +37,15 @@ const configSchema = z
     // performed) lives on disk. Relative to the process's cwd unless
     // absolute.
     historyDbPath: z.string().default("./data/history.db"),
+    // How long an audit-trail row is kept before a periodic sweep deletes
+    // it. 0 keeps everything, for a deployment that ships the rows
+    // somewhere else and wants the file to grow forever on purpose.
+    historyRetentionDays: z.coerce.number().int().nonnegative().default(90),
+    historyPruneIntervalMs: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(6 * 60 * 60 * 1000),
     // Applies to /eligibility, the endpoint that clones a repo and calls the
     // GitHub API, so it's the one worth protecting from abuse.
     rateLimitWindowMs: z.coerce
@@ -87,6 +96,8 @@ function loadConfig() {
     cacheBackend: optionalEnv("CACHE_BACKEND"),
     redisUrl: optionalEnv("REDIS_URL"),
     historyDbPath: optionalEnv("HISTORY_DB_PATH"),
+    historyRetentionDays: optionalEnv("HISTORY_RETENTION_DAYS"),
+    historyPruneIntervalMs: optionalEnv("HISTORY_PRUNE_INTERVAL_MS"),
     rateLimitWindowMs: optionalEnv("RATE_LIMIT_WINDOW_MS"),
     rateLimitMax: optionalEnv("RATE_LIMIT_MAX"),
     shutdownDrainMs: optionalEnv("SHUTDOWN_DRAIN_MS"),

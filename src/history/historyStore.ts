@@ -98,6 +98,31 @@ export class HistoryStore {
   }
 
   /**
+   * Deletes rows evaluated strictly before `cutoff`, returning how many
+   * went. Returns the count so the caller can log a sweep that actually
+   * did something, and say nothing on the (usual) sweep that didn't.
+   *
+   * Every evaluation writes a row and nothing ever removed one, so an
+   * instance left running accumulates the audit trail forever - on a
+   * busy deployment the database outgrows the disk it sits on, and the
+   * oldest rows it is holding onto are the ones nobody will ever ask
+   * about.
+   */
+  prune(cutoff: string): number {
+    const result = this.db
+      .prepare(`DELETE FROM evaluations WHERE evaluated_at < ?`)
+      .run(normalizeTimestamp(cutoff));
+    return result.changes;
+  }
+
+  /** The oldest evaluation still stored, or undefined when empty. */
+  oldestEvaluatedAt(): string | undefined {
+    const row = this.db.prepare(`SELECT MIN(evaluated_at) AS oldest FROM evaluations`).get() as
+      { oldest: string | null } | undefined;
+    return row?.oldest ?? undefined;
+  }
+
+  /**
    * Reads the audit trail back, newest first.
    *
    * One method with optional filters rather than a list-per-question:

@@ -35,7 +35,10 @@ unreleased.
   rate limiting via `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`.
 - Pluggable result cache via `CACHE_BACKEND` (`memory` or `redis`), so
   multiple instances can share results instead of each starting cold.
-- SQLite audit trail of every evaluation performed, at `HISTORY_DB_PATH`.
+- SQLite audit trail of every evaluation performed, at `HISTORY_DB_PATH`,
+  kept to `HISTORY_RETENTION_DAYS` (default 90) by a sweep that runs at
+  startup and every `HISTORY_PRUNE_INTERVAL_MS` after. Set the retention to
+  0 to keep rows forever.
 - Authentication as a GitHub App installation
   (`GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` / `GITHUB_APP_INSTALLATION_ID`)
   alongside `GITHUB_TOKEN`, for higher rate limits without a shared PAT.
