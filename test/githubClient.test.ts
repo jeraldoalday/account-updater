@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const listCommits = vi.fn();
 const listRepoEvents = vi.fn();
 
+// A class, not vi.fn().mockImplementation(() => ...): the client calls
+// `new Octokit(...)`, and an arrow-function implementation isn't
+// constructible.
 vi.mock("@octokit/rest", () => ({
-  Octokit: vi.fn().mockImplementation(() => ({
-    rest: {
+  Octokit: class {
+    rest = {
       repos: { listCommits },
       activity: { listRepoEvents }
-    }
-  }))
+    };
+  }
 }));
 
 const { GitHubClient } = await import("../src/github/client");
