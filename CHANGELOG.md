@@ -27,6 +27,12 @@ unreleased.
 - `GET /admin/evaluations` — read-only view of the SQLite audit trail,
   with combinable filters: `repo`, `eligible`, a `since`/`until` time
   window, and `limit` (default 50, max 200).
+- `GET /admin/evaluations/summary` — counts over the audit trail instead
+  of the rows themselves: totals, pass rate, distinct repos, and the most
+  common failure reasons, grouped with per-repo specifics replaced
+  (`Only N lines of first-party source found (need at least N).`) and one
+  verbatim example each. Same `repo`/`since`/`until` filters as the list,
+  plus `topReasons`.
 - `GET /health` (liveness), `GET /ready` (readiness: reports 503 when the
   cache backend or audit-trail database is unusable), `GET /metrics` (JSON
   counters), `GET /metrics/prometheus` (the same counters in Prometheus's

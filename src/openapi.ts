@@ -246,6 +246,61 @@ export const openApiSpec = {
           "401": { description: "Missing or invalid API key (only when API_KEY is configured)." }
         }
       }
+    },
+    "/admin/evaluations/summary": {
+      get: {
+        summary: "Aggregate view of the evaluation audit trail",
+        description:
+          "Counts over a window rather than the rows themselves: how many evaluations, " +
+          "how many passed, across how many distinct repos, and which failures came up " +
+          "most often. Failure reasons carry per-repo specifics (counts, language names), " +
+          "so they are grouped with those parts replaced - `Only N lines of first-party " +
+          "source found (need at least N).` - with one verbatim example per group. The " +
+          "reason tally reads at most the 2000 most recent failures in the window; " +
+          "`reasonsSampled` says how many it actually read.",
+        parameters: [
+          {
+            name: "repo",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description: "Summarize one repo instead of all of them."
+          },
+          {
+            name: "since",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+            description: "Inclusive lower bound on the window, as an ISO-8601 timestamp."
+          },
+          {
+            name: "until",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+            description: "Inclusive upper bound, same format as `since`."
+          },
+          {
+            name: "topReasons",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 20, default: 5 },
+            description: "How many failure-reason groups to return."
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Counts over the matching window.",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/EvaluationSummary" }
+              }
+            }
+          },
+          "400": { description: "Invalid `repo`, `since`, `until`, or `topReasons`." },
+          "401": { description: "Missing or invalid API key (only when API_KEY is configured)." }
+        }
+      }
     }
   },
   components: {
@@ -443,6 +498,45 @@ export const openApiSpec = {
                 count: { type: "number" },
                 avgMs: { type: "number" },
                 maxMs: { type: "number" }
+              }
+            }
+          }
+        }
+      },
+      EvaluationSummary: {
+        type: "object",
+        properties: {
+          total: { type: "integer" },
+          passed: { type: "integer" },
+          failed: { type: "integer" },
+          passRate: {
+            type: "number",
+            nullable: true,
+            description: "Share of evaluations that passed, or null when there were none.",
+            minimum: 0,
+            maximum: 1
+          },
+          distinctRepos: { type: "integer" },
+          firstEvaluatedAt: { type: "string", format: "date-time" },
+          lastEvaluatedAt: { type: "string", format: "date-time" },
+          reasonsSampled: {
+            type: "integer",
+            description: "How many failed evaluations the reason tally below is based on."
+          },
+          topFailureReasons: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                reason: {
+                  type: "string",
+                  description: "The reason with its varying parts replaced by placeholders."
+                },
+                count: { type: "integer" },
+                example: {
+                  type: "string",
+                  description: "One verbatim reason folded into this group."
+                }
               }
             }
           }

@@ -1,8 +1,15 @@
 import type Database from "better-sqlite3";
 import { DEFAULT_PROVIDER_ID, type ProviderId } from "../providers/hosts";
+import { topFailureReasons, type FailureReasonCount } from "./reasonSummary";
 import type { EligibilityResult, RepoRef } from "../types";
 
 const DEFAULT_LIMIT = 50;
+const DEFAULT_TOP_N = 5;
+// Reason text lives in a JSON column, so grouping it means reading rows
+// rather than letting SQLite count them. Bounded, and the response says
+// how many rows the tally is based on, so a big window degrades to "the
+// most recent N failures" instead of to a slow query.
+const REASON_SAMPLE_LIMIT = 2_000;
 
 export interface EvaluationQuery {
   /** Restrict to one repo, scoped to its provider as well as owner/name. */
@@ -13,6 +20,28 @@ export interface EvaluationQuery {
   since?: string;
   until?: string;
   limit?: number;
+}
+
+export interface SummaryQuery {
+  ref?: RepoRef;
+  since?: string;
+  until?: string;
+  /** How many failure-reason groups to return. Default 5. */
+  topN?: number;
+}
+
+export interface EvaluationSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  /** Share of evaluations that passed, or null when there were none. */
+  passRate: number | null;
+  distinctRepos: number;
+  firstEvaluatedAt?: string;
+  lastEvaluatedAt?: string;
+  /** How many failed evaluations the reason tally actually read. */
+  reasonsSampled: number;
+  topFailureReasons: FailureReasonCount[];
 }
 
 export interface EvaluationRecord {
@@ -123,14 +152,68 @@ export class HistoryStore {
   }
 
   /**
-   * Reads the audit trail back, newest first.
+   * Aggregates the audit trail over a window: how many evaluations, how
+   * many passed, across how many repos, and what the failures were about.
    *
-   * One method with optional filters rather than a list-per-question:
-   * the useful questions combine ("did this repo fail in the last week?"),
-   * and every added filter would otherwise mean another near-identical
-   * query and another route branch.
+   * The per-evaluation list answers "what happened to this repo"; this
+   * answers the questions an operator actually opens the trail for -
+   * whether the pass rate just moved, and which check is doing the
+   * rejecting - without paging through rows to count them by hand.
    */
-  list(query: EvaluationQuery = {}): EvaluationRecord[] {
+  summarize(query: SummaryQuery = {}): EvaluationSummary {
+    const { where, params } = this.buildFilter(query);
+
+    const totals = this.db
+      .prepare(
+        `SELECT COUNT(*) AS total,
+                SUM(eligible) AS passed,
+                COUNT(DISTINCT provider || '/' || owner || '/' || repo) AS distinctRepos,
+                MIN(evaluated_at) AS first,
+                MAX(evaluated_at) AS last
+         FROM evaluations ${where}`
+      )
+      .get(...params) as {
+      total: number;
+      passed: number | null;
+      distinctRepos: number;
+      first: string | null;
+      last: string | null;
+    };
+
+    const total = totals.total;
+    const passed = totals.passed ?? 0;
+
+    const failureRows = this.db
+      .prepare(
+        `SELECT reasons FROM evaluations
+         ${where ? `${where} AND` : "WHERE"} eligible = 0
+         ORDER BY evaluated_at DESC, id DESC
+         LIMIT ?`
+      )
+      .all(...params, REASON_SAMPLE_LIMIT) as { reasons: string }[];
+
+    const reasonLists = failureRows.map((row) => JSON.parse(row.reasons) as string[]);
+
+    return {
+      total,
+      passed,
+      failed: total - passed,
+      // Rounded rather than left as a raw ratio, so the value reads as a
+      // rate (0.6667) instead of a float artifact (0.6666666666666666).
+      passRate: total === 0 ? null : Number((passed / total).toFixed(4)),
+      distinctRepos: totals.distinctRepos,
+      ...(totals.first ? { firstEvaluatedAt: totals.first } : {}),
+      ...(totals.last ? { lastEvaluatedAt: totals.last } : {}),
+      reasonsSampled: reasonLists.length,
+      topFailureReasons: topFailureReasons(reasonLists, query.topN ?? DEFAULT_TOP_N)
+    };
+  }
+
+  /**
+   * The repo/outcome/window clauses shared by list() and summarize(), so
+   * the two can't drift into answering subtly different questions.
+   */
+  private buildFilter(query: EvaluationQuery): { where: string; params: unknown[] } {
     const clauses: string[] = [];
     const params: unknown[] = [];
 
@@ -155,7 +238,20 @@ export class HistoryStore {
       params.push(normalizeTimestamp(query.until));
     }
 
-    const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    return { where: clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "", params };
+  }
+
+  /**
+   * Reads the audit trail back, newest first.
+   *
+   * One method with optional filters rather than a list-per-question:
+   * the useful questions combine ("did this repo fail in the last week?"),
+   * and every added filter would otherwise mean another near-identical
+   * query and another route branch.
+   */
+  list(query: EvaluationQuery = {}): EvaluationRecord[] {
+    const { where, params } = this.buildFilter(query);
+
     const rows = this.db
       .prepare(
         `SELECT id, provider, owner, repo, evaluated_at, eligible, reasons

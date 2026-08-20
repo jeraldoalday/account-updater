@@ -245,6 +245,56 @@
             },
             "description": "Lists past evaluations from the SQLite audit trail, most recent first. Filters combine: `repo` for one repo, `eligible` for outcome, `since`/`until` for a time window, and `limit` to cap the result count (default 50, max 200)."
           }
+        },
+        {
+          "name": "Aggregate view of the evaluation audit trail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/evaluations/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "evaluations",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "repo",
+                  "value": "",
+                  "description": "Summarize one repo instead of all of them.",
+                  "disabled": true
+                },
+                {
+                  "key": "since",
+                  "value": "<date-time>",
+                  "description": "Inclusive lower bound on the window, as an ISO-8601 timestamp.",
+                  "disabled": true
+                },
+                {
+                  "key": "until",
+                  "value": "<date-time>",
+                  "description": "Inclusive upper bound, same format as `since`.",
+                  "disabled": true
+                },
+                {
+                  "key": "topReasons",
+                  "value": "5",
+                  "description": "How many failure-reason groups to return.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Counts over a window rather than the rows themselves: how many evaluations, how many passed, across how many distinct repos, and which failures came up most often. Failure reasons carry per-repo specifics (counts, language names), so they are grouped with those parts replaced - `Only N lines of first-party source found (need at least N).` - with one verbatim example per group. The reason tally reads at most the 2000 most recent failures in the window; `reasonsSampled` says how many it actually read."
+          }
         }
       ]
     }
