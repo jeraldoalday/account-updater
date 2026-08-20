@@ -17,6 +17,12 @@ export interface EvaluateOptions {
   // under a plain "owner/repo" key, or a later caller without access to
   // that repo could be served someone else's cached private-repo result.
   cacheable?: boolean;
+  // Skip the cache *read* and recompute, then store the fresh result.
+  // Someone who has just fixed the thing their repo was rejected for
+  // otherwise has to wait out CACHE_TTL_MS to find out, with no way to
+  // ask for a real answer - and "wait ten minutes and try again" is the
+  // one instruction an integration can't act on.
+  refresh?: boolean;
 }
 
 const resultCache = createCache<EligibilityResult>();
@@ -150,6 +156,7 @@ export async function evaluateEligibility(
   options: EvaluateOptions = {}
 ): Promise<EligibilityResult> {
   const cacheable = options.cacheable ?? true;
+  const refresh = options.refresh ?? false;
   // Provider-scoped: "acme/widgets" on two forges are two different
   // projects, and a shared Redis cache must not serve one for the other.
   const cacheKey = `${ref.provider}/${ref.owner}/${ref.repo}`;
@@ -158,13 +165,22 @@ export async function evaluateEligibility(
     return computeEligibility(ref, token);
   }
 
-  const cached = await readCache(cacheKey);
-  if (cached) {
-    metrics.recordCacheHit();
-    return cached;
+  if (refresh) {
+    metrics.recordCacheRefresh();
+  } else {
+    const cached = await readCache(cacheKey);
+    if (cached) {
+      metrics.recordCacheHit();
+      return cached;
+    }
+    metrics.recordCacheMiss();
   }
-  metrics.recordCacheMiss();
 
+  // Joined even on a refresh: an in-flight entry is always a computation
+  // that started after this request's own decision to bypass the cache,
+  // so it is as fresh as recomputing would be - and joining it is what
+  // stops a burst of refreshes for one repo from becoming a burst of
+  // clones.
   const existing = inFlight.get(cacheKey);
   if (existing) {
     return existing;

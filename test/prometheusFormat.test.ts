@@ -12,6 +12,7 @@ function emptySnapshot(): MetricsSnapshot {
     cacheHits: 0,
     cacheMisses: 0,
     cacheErrors: 0,
+    cacheRefreshes: 0,
     stageDurations: {}
   };
 }
@@ -64,5 +65,11 @@ describe("toPrometheusText", () => {
     const text = toPrometheusText({ ...emptySnapshot(), cacheErrors: 3 });
     expect(text).toContain("# TYPE account_updater_cache_errors_total counter");
     expect(text).toContain("account_updater_cache_errors_total 3");
+  });
+  it("exposes the refresh counter", () => {
+    const text = toPrometheusText({ ...emptySnapshot(), cacheRefreshes: 4 });
+
+    expect(text).toContain("# TYPE account_updater_cache_refreshes_total counter");
+    expect(text).toContain("account_updater_cache_refreshes_total 4");
   });
 });

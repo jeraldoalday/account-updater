@@ -329,6 +329,15 @@ export const openApiSpec = {
             description:
               "Optional per-request provider token, overriding GITHUB_TOKEN. Results " +
               "computed with it are never cached."
+          },
+          refresh: {
+            type: "boolean",
+            default: false,
+            description:
+              "Recompute instead of answering from cache, then store the fresh result. " +
+              "For rechecking a repo whose problem was just fixed, rather than waiting " +
+              "out CACHE_TTL_MS. Always clones and calls the provider API, so it counts " +
+              "against the rate limit like any other check."
           }
         }
       },
@@ -343,7 +352,12 @@ export const openApiSpec = {
             maxItems: 20,
             example: ["octocat/Hello-World", "rust-lang/rust"]
           },
-          token: { type: "string" }
+          token: { type: "string" },
+          refresh: {
+            type: "boolean",
+            default: false,
+            description: "Recompute every entry instead of answering from cache."
+          }
         }
       },
       RepoRef: {
@@ -483,6 +497,12 @@ export const openApiSpec = {
           eligibilityFailed: { type: "number" },
           cacheHits: { type: "number" },
           cacheMisses: { type: "number" },
+          cacheRefreshes: {
+            type: "number",
+            description:
+              "Requests that asked for a recomputation with `refresh`, bypassing a cached " +
+              "result. Counted apart from misses because they are the expensive path."
+          },
           cacheErrors: {
             type: "number",
             description:

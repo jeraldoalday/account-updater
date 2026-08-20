@@ -39,6 +39,12 @@ unreleased.
   text exposition format), and `GET /openapi.json` (the spec).
 - Optional API-key auth on `/eligibility` and `/admin` via `API_KEY`, and
   rate limiting via `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`.
+- `refresh: true` on `POST /eligibility/check` and
+  `POST /eligibility/check-batch`, which recomputes instead of answering
+  from cache and stores the fresh result — for rechecking a repo whose
+  problem was just fixed, rather than waiting out `CACHE_TTL_MS`. Counted
+  as `cacheRefreshes` in `/metrics`, apart from hits and misses, because
+  it always clones and calls the provider API.
 - Pluggable result cache via `CACHE_BACKEND` (`memory` or `redis`), so
   multiple instances can share results instead of each starting cold.
 - SQLite audit trail of every evaluation performed, at `HISTORY_DB_PATH`,

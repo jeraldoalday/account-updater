@@ -84,7 +84,7 @@ describe("app", () => {
     expect(evaluateEligibility).toHaveBeenCalledWith(
       { provider: "github", owner: "o", repo: "r" },
       undefined,
-      { cacheable: true }
+      { cacheable: true, refresh: false }
     );
   });
 
@@ -98,7 +98,7 @@ describe("app", () => {
     expect(evaluateEligibility).toHaveBeenCalledWith(
       { provider: "github", owner: "o", repo: "r" },
       "caller-token",
-      { cacheable: false }
+      { cacheable: false, refresh: false }
     );
   });
 
@@ -129,7 +129,7 @@ describe("app", () => {
     expect(evaluateEligibility).toHaveBeenCalledWith(
       { provider: "gitlab", owner: "o", repo: "r" },
       undefined,
-      { cacheable: true }
+      { cacheable: true, refresh: false }
     );
   });
 

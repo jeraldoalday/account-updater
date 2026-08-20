@@ -62,6 +62,11 @@ export function toPrometheusText(snapshot: MetricsSnapshot): string {
       "Eligibility result cache reads/writes that failed (result still computed)",
       snapshot.cacheErrors
     ),
+    ...counter(
+      "account_updater_cache_refreshes_total",
+      "Requests that asked for a recomputation, bypassing a cached result",
+      snapshot.cacheRefreshes
+    ),
     "# HELP account_updater_stage_duration_count_total Evaluation stage observations, by stage",
     "# TYPE account_updater_stage_duration_count_total counter",
     ...Object.entries(snapshot.stageDurations).map(([stage, stats]) =>

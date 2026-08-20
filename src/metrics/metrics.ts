@@ -17,6 +17,11 @@ export interface MetricsSnapshot {
   // counter a degraded shared cache is invisible: hit rate collapses and
   // nothing says why.
   cacheErrors: number;
+  // Requests that asked for a recomputation with `refresh`, bypassing a
+  // possibly-fresh cached result. Counted separately because they are the
+  // expensive path (always a clone plus API calls) and a client looping on
+  // refresh is otherwise indistinguishable from a collapsed hit rate.
+  cacheRefreshes: number;
   // Per-stage timing of eligibility checks actually performed (a cache hit
   // records nothing here, same as eligibilityChecksTotal), so a slow check
   // is diagnosable by stage - e.g. is the clone slow, or the GitHub API -
@@ -38,6 +43,7 @@ class Metrics {
   private cacheHits = 0;
   private cacheMisses = 0;
   private cacheErrors = 0;
+  private cacheRefreshes = 0;
   private stageDurations: Record<string, { count: number; totalMs: number; maxMs: number }> = {};
 
   recordRequest(statusCode: number): void {
@@ -64,6 +70,10 @@ class Metrics {
     this.cacheErrors++;
   }
 
+  recordCacheRefresh(): void {
+    this.cacheRefreshes++;
+  }
+
   recordStageDuration(stage: string, durationMs: number): void {
     const existing = this.stageDurations[stage] ?? { count: 0, totalMs: 0, maxMs: 0 };
     existing.count++;
@@ -82,6 +92,7 @@ class Metrics {
       cacheHits: this.cacheHits,
       cacheMisses: this.cacheMisses,
       cacheErrors: this.cacheErrors,
+      cacheRefreshes: this.cacheRefreshes,
       stageDurations: Object.fromEntries(
         Object.entries(this.stageDurations).map(([stage, s]) => [
           stage,
@@ -104,6 +115,7 @@ class Metrics {
     this.cacheHits = 0;
     this.cacheMisses = 0;
     this.cacheErrors = 0;
+    this.cacheRefreshes = 0;
     this.stageDurations = {};
   }
 }

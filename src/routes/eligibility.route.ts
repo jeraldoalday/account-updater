@@ -21,7 +21,12 @@ const requestSchema = z.object({
   repo: z.string({ required_error: REPO_REQUIRED_MESSAGE }).min(1, REPO_REQUIRED_MESSAGE),
   // Optional per-request token, e.g. the connecting user's own GitHub OAuth
   // token, so private repos can be evaluated without a shared server token.
-  token: z.string().optional()
+  token: z.string().optional(),
+  // Recompute instead of answering from cache. For the caller who has just
+  // fixed what their repo was rejected for: without it the only remedy is
+  // to wait out CACHE_TTL_MS, which is not something an integration can
+  // act on.
+  refresh: z.boolean().optional()
 });
 
 const batchRequestSchema = z.object({
@@ -29,7 +34,8 @@ const batchRequestSchema = z.object({
     .array(z.string().min(1, REPO_REQUIRED_MESSAGE))
     .min(1, "repos must contain at least one entry")
     .max(MAX_BATCH_SIZE, `repos cannot contain more than ${MAX_BATCH_SIZE} entries`),
-  token: z.string().optional()
+  token: z.string().optional(),
+  refresh: z.boolean().optional()
 });
 
 type EligibilityOutcome =
@@ -39,10 +45,11 @@ type EligibilityOutcome =
 async function tryEvaluate(
   ref: RepoRef,
   token: string | undefined,
-  cacheable: boolean
+  cacheable: boolean,
+  refresh: boolean
 ): Promise<EligibilityOutcome> {
   try {
-    const result = await evaluateEligibility(ref, token, { cacheable });
+    const result = await evaluateEligibility(ref, token, { cacheable, refresh });
     return { ok: true, result };
   } catch (err) {
     // A forge this service can name but not evaluate is a problem with the
@@ -92,7 +99,7 @@ eligibilityRouter.post("/check", async (req, res) => {
   // reflect access to a private repo that other callers don't have.
   const cacheable = !parsed.data.token;
 
-  const outcome = await tryEvaluate(ref, token, cacheable);
+  const outcome = await tryEvaluate(ref, token, cacheable, parsed.data.refresh ?? false);
   if (!outcome.ok) {
     if (outcome.rateLimit?.retryAfterSeconds !== undefined) {
       res.setHeader("Retry-After", String(outcome.rateLimit.retryAfterSeconds));
@@ -128,7 +135,7 @@ eligibilityRouter.post("/check-batch", async (req, res) => {
         return { repo: repoInput, error: (err as Error).message };
       }
 
-      const outcome = await tryEvaluate(ref, token, cacheable);
+      const outcome = await tryEvaluate(ref, token, cacheable, parsed.data.refresh ?? false);
       if (!outcome.ok) {
         return {
           repo: describeRef(ref),

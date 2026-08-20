@@ -16,6 +16,7 @@ describe("metrics", () => {
       cacheHits: 0,
       cacheMisses: 0,
       cacheErrors: 0,
+      cacheRefreshes: 0,
       stageDurations: {}
     });
   });
@@ -80,5 +81,14 @@ describe("metrics", () => {
       cloneAndScan: { count: 2, avgMs: 200, maxMs: 300 },
       commitHistory: { count: 1, avgMs: 50, maxMs: 50 }
     });
+  });
+  it("counts a forced refresh apart from a hit or a miss", () => {
+    metrics.recordCacheRefresh();
+    metrics.recordCacheRefresh();
+
+    const snapshot = metrics.snapshot();
+    expect(snapshot.cacheRefreshes).toBe(2);
+    expect(snapshot.cacheHits).toBe(0);
+    expect(snapshot.cacheMisses).toBe(0);
   });
 });
