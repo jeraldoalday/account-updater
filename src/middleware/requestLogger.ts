@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { metrics } from "../metrics/metrics";
+import { MAX_ECHOED_PATH_LENGTH, truncate } from "../utils/truncate";
 
 // Structured (one JSON object per line) so logs are machine-parseable by a
 // log aggregator, with the request ID as the join key across a request's
@@ -14,7 +15,9 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
         level: "info",
         requestId: req.id,
         method: req.method,
-        path: req.originalUrl,
+        // Bounded: the path is caller-chosen, and an unbounded echo of it
+        // makes filling a log budget as cheap as sending long URLs.
+        path: truncate(req.originalUrl, MAX_ECHOED_PATH_LENGTH),
         status: res.statusCode,
         durationMs: Number(durationMs.toFixed(1)),
         time: new Date().toISOString()

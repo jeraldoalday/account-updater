@@ -71,6 +71,13 @@ unreleased.
 
 ### Fixed
 
+- An unmatched route answers 404 as JSON, like every other error, instead
+  of falling through to Express's default HTML error page - previously a
+  typo'd path was the one response a client parsing `error` out of a JSON
+  body couldn't read. The body names the method and path and points at
+  `GET /openapi.json`.
+- The access log bounds the request path it echoes, so long URLs can't be
+  used to run up a log bill.
 - Shutdown now drains before it closes the listener. `GET /ready` reports
   `draining: true` and 503 as soon as SIGTERM arrives, and the listener
   stays open for `SHUTDOWN_DRAIN_MS` so a load balancer can take the

@@ -63,4 +63,12 @@ describe("requestLogger", () => {
     expect(snapshot.requestsTotal).toBe(2);
     expect(snapshot.requestsByStatusClass).toEqual({ "2xx": 1, "4xx": 1 });
   });
+
+  it("bounds the logged path, so long URLs can't be used to flood the log", async () => {
+    await request(testApp()).get(`/${"a".repeat(5_000)}`);
+
+    const logged = JSON.parse(consoleLogSpy.mock.calls[0][0] as string);
+    expect(logged.path.length).toBeLessThan(250);
+    expect(logged.path.endsWith("...")).toBe(true);
+  });
 });

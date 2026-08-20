@@ -4,6 +4,7 @@ import { adminRouter } from "./routes/admin.route";
 import { requestId } from "./middleware/requestId";
 import { requestLogger } from "./middleware/requestLogger";
 import { errorHandler } from "./middleware/errorHandler";
+import { notFound } from "./middleware/notFound";
 import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import { rateLimit } from "./middleware/rateLimit";
 import { config } from "./config";
@@ -75,6 +76,9 @@ export function createApp() {
 
   app.use("/admin", apiKeyAuth(config.apiKey), adminRouter);
 
+  // After every route, before the error handler: anything that reached
+  // here matched nothing.
+  app.use(notFound);
   app.use(errorHandler);
 
   return app;
