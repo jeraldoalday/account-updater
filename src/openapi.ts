@@ -18,17 +18,19 @@ export const openApiSpec = {
   paths: {
     "/health": {
       get: {
-        summary: "Liveness/readiness check",
+        summary: "Liveness check: is this process alive?",
         security: [],
         responses: {
           "200": {
-            description: "Service is up.",
+            description:
+              "The process is alive. Also answered while shutting down (with " +
+              '`status: "draining"`), since a deliberate shutdown must not be restarted.',
             content: {
               "application/json": {
                 schema: {
                   type: "object",
                   properties: {
-                    status: { type: "string", example: "ok" },
+                    status: { type: "string", enum: ["ok", "draining"], example: "ok" },
                     version: { type: "string" },
                     uptimeSeconds: { type: "number" }
                   }
@@ -400,6 +402,13 @@ export const openApiSpec = {
         type: "object",
         properties: {
           ready: { type: "boolean" },
+          draining: {
+            type: "boolean",
+            description:
+              "True once the process has begun shutting down. It keeps serving in-flight " +
+              "and newly-arrived requests for a drain window, but reports itself not-ready " +
+              "immediately so a load balancer stops routing to it before the listener closes."
+          },
           checks: {
             type: "object",
             properties: {

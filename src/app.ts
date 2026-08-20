@@ -12,6 +12,7 @@ import { metrics } from "./metrics/metrics";
 import { toPrometheusText } from "./metrics/prometheusFormat";
 import { openApiSpec } from "./openapi";
 import { checkReadiness } from "./health/readiness";
+import { isDraining } from "./lifecycle/drainState";
 
 export function createApp() {
   const app = express();
@@ -21,8 +22,16 @@ export function createApp() {
   app.use(express.json());
   app.use(requestLogger);
 
+  // Stays 200 even while draining: this answers "restart me?", and a
+  // process that is deliberately shutting down must not be restarted for
+  // it. The status string still says which of the two it is, so a human
+  // reading a probe response isn't misled by the 200.
   app.get("/health", (_req, res) => {
-    res.status(200).json({ status: "ok", version, uptimeSeconds: Math.round(process.uptime()) });
+    res.status(200).json({
+      status: isDraining() ? "draining" : "ok",
+      version,
+      uptimeSeconds: Math.round(process.uptime())
+    });
   });
 
   // Liveness (above) answers "restart me?"; readiness answers "send me

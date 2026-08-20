@@ -1,5 +1,6 @@
 import { createCache } from "../cache/createCache";
 import { createHistoryStore } from "../history/createHistoryStore";
+import { isDraining } from "../lifecycle/drainState";
 
 export interface DependencyStatus {
   ok: boolean;
@@ -8,6 +9,13 @@ export interface DependencyStatus {
 
 export interface ReadinessReport {
   ready: boolean;
+  /**
+   * True once the process has begun shutting down. Reported separately
+   * from `ready` so an operator can tell "this instance is on its way out"
+   * apart from "this instance's Redis is broken" - both are 503, but only
+   * one of them is a problem.
+   */
+  draining: boolean;
   checks: {
     cache: DependencyStatus;
     history: DependencyStatus;
@@ -49,5 +57,6 @@ function checkHistory(): DependencyStatus {
 export async function checkReadiness(): Promise<ReadinessReport> {
   const cache = await checkCache();
   const history = checkHistory();
-  return { ready: cache.ok && history.ok, checks: { cache, history } };
+  const draining = isDraining();
+  return { ready: !draining && cache.ok && history.ok, draining, checks: { cache, history } };
 }

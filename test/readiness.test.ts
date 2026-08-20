@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
 const ping = vi.fn();
@@ -19,6 +19,7 @@ vi.mock("../src/history/createHistoryStore", () => ({
 
 const { checkReadiness } = await import("../src/health/readiness");
 const { createApp } = await import("../src/app");
+const { beginDraining, resetDrainState } = await import("../src/lifecycle/drainState");
 
 describe("checkReadiness", () => {
   beforeEach(() => {
@@ -29,6 +30,7 @@ describe("checkReadiness", () => {
   it("reports ready when both dependencies answer", async () => {
     await expect(checkReadiness()).resolves.toEqual({
       ready: true,
+      draining: false,
       checks: { cache: { ok: true }, history: { ok: true } }
     });
   });
@@ -91,6 +93,7 @@ describe("GET /ready", () => {
     expect(res.status).toBe(503);
     expect(res.body).toEqual({
       ready: false,
+      draining: false,
       checks: { cache: { ok: false, error: "redis is gone" }, history: { ok: true } }
     });
   });
@@ -100,5 +103,38 @@ describe("GET /ready", () => {
     // configured on the caller.
     const res = await request(createApp()).get("/ready");
     expect(res.status).not.toBe(401);
+  });
+});
+
+describe("readiness while shutting down", () => {
+  beforeEach(() => {
+    ping.mockReset().mockResolvedValue(undefined);
+    historyPing.mockReset().mockReturnValue(undefined);
+    resetDrainState();
+  });
+
+  afterEach(() => resetDrainState());
+
+  it("answers 503 as soon as shutdown starts, while dependencies are still fine", async () => {
+    // This is what takes the instance out of the load balancer's rotation
+    // *before* the listener closes. Reporting 200 here until the socket
+    // shuts is what turns a rolling deploy into dropped connections.
+    beginDraining();
+
+    const res = await request(createApp()).get("/ready");
+
+    expect(res.status).toBe(503);
+    expect(res.body.ready).toBe(false);
+    expect(res.body.draining).toBe(true);
+    expect(res.body.checks.cache.ok).toBe(true);
+  });
+
+  it("keeps /health at 200 while draining, so the platform doesn't restart it", async () => {
+    beginDraining();
+
+    const res = await request(createApp()).get("/health");
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("draining");
   });
 });

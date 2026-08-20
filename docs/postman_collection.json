@@ -21,7 +21,7 @@
       "name": "general",
       "item": [
         {
-          "name": "Liveness/readiness check",
+          "name": "Liveness check: is this process alive?",
           "request": {
             "method": "GET",
             "header": [],

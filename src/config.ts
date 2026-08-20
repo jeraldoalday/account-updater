@@ -44,7 +44,18 @@ const configSchema = z
       .int()
       .positive()
       .default(60 * 1000),
-    rateLimitMax: z.coerce.number().int().positive().default(20)
+    rateLimitMax: z.coerce.number().int().positive().default(20),
+    // Shutdown pacing. `shutdownDrainMs` is how long the process keeps
+    // serving after SIGTERM while /ready answers 503, so a load balancer
+    // has time to notice before the listener closes; `shutdownGraceMs` is
+    // the hard deadline for the whole shutdown.
+    shutdownDrainMs: z.coerce.number().int().nonnegative().default(5_000),
+    shutdownGraceMs: z.coerce.number().int().positive().default(20_000)
+  })
+  .refine((data) => data.shutdownGraceMs > data.shutdownDrainMs, {
+    message:
+      "SHUTDOWN_GRACE_MS must be greater than SHUTDOWN_DRAIN_MS, or the deadline fires before draining finishes",
+    path: ["shutdownGraceMs"]
   })
   .refine((data) => data.cacheBackend !== "redis" || data.redisUrl !== undefined, {
     message: "REDIS_URL is required when CACHE_BACKEND=redis",
@@ -77,7 +88,9 @@ function loadConfig() {
     redisUrl: optionalEnv("REDIS_URL"),
     historyDbPath: optionalEnv("HISTORY_DB_PATH"),
     rateLimitWindowMs: optionalEnv("RATE_LIMIT_WINDOW_MS"),
-    rateLimitMax: optionalEnv("RATE_LIMIT_MAX")
+    rateLimitMax: optionalEnv("RATE_LIMIT_MAX"),
+    shutdownDrainMs: optionalEnv("SHUTDOWN_DRAIN_MS"),
+    shutdownGraceMs: optionalEnv("SHUTDOWN_GRACE_MS")
   });
 
   if (!parsed.success) {

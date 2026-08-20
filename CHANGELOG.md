@@ -49,6 +49,9 @@ unreleased.
   yet" 400.
 - Docker image with a healthcheck, `docker-compose.yml`, and graceful
   shutdown on SIGTERM/SIGINT.
+- `SHUTDOWN_DRAIN_MS` / `SHUTDOWN_GRACE_MS` to pace shutdown: how long to
+  keep serving while reporting not-ready, and the hard deadline for the
+  whole shutdown.
 - Developer tooling: a local self-check CLI (`npm run stats`), a load-test
   tool for the rate limiter and cache under concurrency
   (`npm run loadtest`), and a Postman/Insomnia collection generated from
@@ -68,6 +71,15 @@ unreleased.
 
 ### Fixed
 
+- Shutdown now drains before it closes the listener. `GET /ready` reports
+  `draining: true` and 503 as soon as SIGTERM arrives, and the listener
+  stays open for `SHUTDOWN_DRAIN_MS` so a load balancer can take the
+  instance out of rotation first — previously the socket closed
+  immediately and every request routed in that gap became a connection
+  error. `GET /health` stays 200 (with `status: "draining"`) so the
+  platform doesn't restart a process that is deliberately going away, and
+  idle keep-alive connections are dropped rather than holding shutdown
+  open until the deadline.
 - Repo-URL parsing no longer accepts crafted URLs (embedded userinfo,
   lookalike hosts, non-https schemes) that could steer the outbound clone
   at an internal address.

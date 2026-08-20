@@ -1,7 +1,9 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { createApp } from "./app";
 import { config } from "./config";
 import { closeCache } from "./cache/createCache";
 import { closeHistoryStore } from "./history/createHistoryStore";
+import { gracefulShutdown } from "./lifecycle/gracefulShutdown";
 
 const app = createApp();
 
@@ -9,22 +11,30 @@ const server = app.listen(config.port, () => {
   console.log(`account-updater listening on port ${config.port}`);
 });
 
+let shuttingDown = false;
+
 function shutdown(signal: string): void {
-  console.log(`${signal} received, shutting down...`);
-  server.close((err) => {
-    if (err) {
-      console.error("Error while closing the server:", err);
-      process.exit(1);
-    }
-    closeCache()
-      .catch((cacheErr) => console.error("Error while closing the cache connection:", cacheErr))
-      .finally(() => {
-        closeHistoryStore();
-        process.exit(0);
-      });
+  // A second SIGTERM (or an impatient Ctrl-C) means "stop waiting", not
+  // "start a second shutdown racing the first".
+  if (shuttingDown) {
+    console.log(`${signal} received again, exiting immediately`);
+    process.exit(1);
+  }
+  shuttingDown = true;
+
+  void gracefulShutdown(signal, {
+    server,
+    drainMs: config.shutdownDrainMs,
+    graceMs: config.shutdownGraceMs,
+    closers: [
+      { name: "cache", close: closeCache },
+      { name: "history", close: closeHistoryStore }
+    ],
+    wait: (ms) => delay(ms),
+    log: (event) =>
+      console.log(JSON.stringify({ level: "info", ...event, time: new Date().toISOString() })),
+    exit: (code) => process.exit(code)
   });
-  // Force-exit if in-flight requests (e.g. a slow clone) don't finish in time.
-  setTimeout(() => process.exit(1), 10_000).unref();
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
