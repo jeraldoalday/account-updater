@@ -11,6 +11,7 @@ function productionConfig(overrides: Partial<AuditableConfig> = {}): AuditableCo
   return {
     apiKey: "secret",
     githubToken: "ghp_x",
+    gitlabToken: "glpat_x",
     cacheBackend: "redis",
     cacheTtlMs: 600_000,
     historyDbPath: "/var/lib/account-updater/history.db",
@@ -48,6 +49,18 @@ describe("auditConfig", () => {
 
     expect(findings.map((f) => f.id)).toContain("no-github-credential");
     expect(findings[0].severity).toBe("critical");
+  });
+
+  it("calls out a missing GitLab credential as a warning, not a blocker", () => {
+    // Unlike the GitHub case, a deployment can legitimately never see a
+    // GitLab repo - so this is worth saying and not worth refusing to
+    // ship over.
+    const findings = auditConfig(productionConfig({ gitlabToken: undefined }));
+    const finding = findings.find((f) => f.id === "no-gitlab-credential");
+
+    expect(finding?.severity).toBe("warning");
+    expect(finding?.remedy).toContain("read_api");
+    expect(hasBlockingFindings(findings)).toBe(false);
   });
 
   it("accepts a GitHub App installation in place of a token", () => {

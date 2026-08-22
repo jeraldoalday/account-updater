@@ -19,6 +19,7 @@ export interface AuditableConfig {
   apiKey?: string;
   githubToken?: string;
   githubAppAuthConfig?: unknown;
+  gitlabToken?: string;
   cacheBackend: "memory" | "redis";
   cacheTtlMs: number;
   historyDbPath: string;
@@ -66,6 +67,21 @@ export function auditConfig(config: AuditableConfig): ConfigFinding[] {
         "Neither GITHUB_TOKEN nor a GitHub App installation is configured, so GitHub API calls are unauthenticated (60 requests/hour, shared across every repo checked).",
       remedy:
         "Set GITHUB_TOKEN, or GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY/GITHUB_APP_INSTALLATION_ID for a higher shared limit."
+    });
+  }
+
+  // Deliberately a warning where the missing GitHub credential is
+  // critical. A deployment can legitimately never see a GitLab repo, in
+  // which case this costs nothing - but if it does see one, the failure is
+  // the same shape: throttled requests, and private projects invisible.
+  if (!config.gitlabToken) {
+    findings.push({
+      severity: "warning",
+      id: "no-gitlab-credential",
+      message:
+        "GITLAB_TOKEN is not set, so GitLab API calls are unauthenticated (heavily throttled) and private GitLab projects cannot be evaluated at all.",
+      remedy:
+        "Set GITLAB_TOKEN with read_api scope (plus read_repository to clone private projects), or ignore this if no GitLab repo will ever be checked here."
     });
   }
 

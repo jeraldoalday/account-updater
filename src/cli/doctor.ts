@@ -1,6 +1,30 @@
 import { config } from "../config";
 import { auditConfig, formatFindings, hasBlockingFindings } from "../health/configAudit";
+import { PROVIDER_HOSTS, PROVIDER_IDS } from "../providers/hosts";
+import { isProviderSupported } from "../providers/registry";
 import { version } from "../version";
+
+/**
+ * Which forges this build can evaluate, and whether each has a credential
+ * configured.
+ *
+ * Worth printing next to the findings because the two facts are only
+ * useful together: "GITLAB_TOKEN is not set" matters a great deal if
+ * GitLab repos are evaluated here and not at all otherwise, and nothing
+ * else in the output says which forges are even in play.
+ */
+function describeProviders(): string {
+  const credentials: Partial<Record<string, string | undefined>> = {
+    github: config.githubToken ?? (config.githubAppAuthConfig ? "app installation" : undefined),
+    gitlab: config.gitlabToken
+  };
+
+  return PROVIDER_IDS.map((id) => {
+    const name = PROVIDER_HOSTS[id].displayName;
+    if (!isProviderSupported(id)) return `  ${name}: recognized, not implemented`;
+    return `  ${name}: implemented, ${credentials[id] ? "credential configured" : "no credential (unauthenticated)"}`;
+  }).join("\n");
+}
 
 /**
  * Reviews the configuration this environment would start the service with,
@@ -19,6 +43,8 @@ function main(): void {
   const findings = auditConfig(config);
 
   console.log(`account-updater ${version} - configuration review\n`);
+  console.log("Providers:");
+  console.log(`${describeProviders()}\n`);
   console.log(formatFindings(findings));
 
   const counts = {
