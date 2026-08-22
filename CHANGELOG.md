@@ -13,6 +13,57 @@ This file started partway through the project's life, so the 1.0.0 entries
 below were reconstructed from the commit history rather than written as the
 work landed. Everything after that release is written as it lands.
 
+## [1.1.0] - 2026-08-23
+
+GitLab support. The provider seam shipped in 1.0.0 with one implementation
+behind it; this is the second, which is what turns the abstraction from a
+claim into a tested one.
+
+### Added
+
+- GitLab repos are now evaluated rather than refused. A `gitlab.com` URL,
+  ssh reference, or `/-/`-suffixed URL copied out of the GitLab UI is
+  checked the same way a GitHub one is, against the same thresholds.
+- `GITLAB_TOKEN` — GitLab personal or project access token, used for API
+  calls and for cloning private projects (`read_api`, plus
+  `read_repository` for private clones). Per-forge on purpose: neither
+  token is ever sent to the other forge's API. A per-request `token` still
+  applies to whichever provider the request names.
+- `PROVIDER_REQUEST_TIMEOUT_MS` (default 10000) — ceiling on a single
+  outbound provider API call, so one unresponsive upstream can't hold a
+  request open indefinitely.
+- `/metrics` reports `eligibilityByProvider`, and `/metrics/prometheus`
+  exports `account_updater_eligibility_checks_by_provider_total` labelled
+  by provider and outcome — with two forges, an aggregate pass rate can't
+  say whether the service changed or one forge's traffic did.
+- `npm run doctor` opens with which forges this build can evaluate and
+  whether each has a credential, and warns when `GITLAB_TOKEN` is unset. A
+  warning rather than a blocker: a deployment can legitimately never see a
+  GitLab repo.
+- `npm run smoke` checks a GitLab project by default alongside the GitHub
+  ones, since the offline suites cannot catch a deployment with no route to
+  gitlab.com or an expired GitLab token.
+
+### Changed
+
+- A rate-limit refusal now reports the remaining quota and reset time from
+  either forge. GitLab follows the IETF RateLimit-Headers draft and sends
+  those values unprefixed, so previously a GitLab 429 reached the caller
+  without the detail that makes a 503 actionable.
+- Bitbucket is now the only recognized-but-unimplemented forge, and its
+  400 names both forges that do work.
+
+### Fixed
+
+- A GitLab URL naming a project inside a group
+  (`gitlab.com/acme/platform/widgets`) was read with GitHub's rule — owner
+  is the first path segment — and evaluated the group `acme/platform`
+  instead of the project. Nested namespaces are now part of the reference,
+  validated segment by segment, and capped at GitLab's own depth limit of 20.
+- A blank `Retry-After` header from an upstream was read as "retry
+  immediately" instead of as absent, defeating the backoff it was meant to
+  pace.
+
 ## [1.0.0] - 2026-08-20
 
 First tagged release. The service has been feature-complete for its
