@@ -1,4 +1,4 @@
-import { isRateLimitError } from "./rateLimitInfo";
+import { isRateLimitError } from "../net/rateLimitInfo";
 import {
   DEFAULT_RETRY_OPTIONS,
   retrying,

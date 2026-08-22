@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { parseRepoRef } from "../utils/repoUrl";
 import { evaluateEligibility } from "../eligibility/evaluate";
-import { extractRateLimitInfo, type RateLimitInfo } from "../github/rateLimitInfo";
+import { extractRateLimitInfo, type RateLimitInfo } from "../net/rateLimitInfo";
 import { UnsupportedProviderError } from "../providers/provider";
 import { describeRef } from "../providers/hosts";
 import { mapWithConcurrency } from "../utils/concurrency";
