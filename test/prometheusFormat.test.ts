@@ -13,6 +13,7 @@ function emptySnapshot(): MetricsSnapshot {
     cacheMisses: 0,
     cacheErrors: 0,
     cacheRefreshes: 0,
+    eligibilityByProvider: {},
     stageDurations: {}
   };
 }
@@ -71,5 +72,50 @@ describe("toPrometheusText", () => {
 
     expect(text).toContain("# TYPE account_updater_cache_refreshes_total counter");
     expect(text).toContain("account_updater_cache_refreshes_total 4");
+  });
+});
+
+describe("per-provider eligibility series", () => {
+  it("renders one series per provider and outcome", () => {
+    const text = toPrometheusText({
+      ...emptySnapshot(),
+      eligibilityByProvider: {
+        github: { total: 5, passed: 4, failed: 1 },
+        gitlab: { total: 2, passed: 0, failed: 2 }
+      }
+    });
+
+    expect(text).toContain(
+      'account_updater_eligibility_checks_by_provider_total{provider="github",outcome="passed"} 4'
+    );
+    expect(text).toContain(
+      'account_updater_eligibility_checks_by_provider_total{provider="github",outcome="failed"} 1'
+    );
+    expect(text).toContain(
+      'account_updater_eligibility_checks_by_provider_total{provider="gitlab",outcome="failed"} 2'
+    );
+  });
+
+  it("declares the series once, not once per provider", () => {
+    const text = toPrometheusText({
+      ...emptySnapshot(),
+      eligibilityByProvider: {
+        github: { total: 1, passed: 1, failed: 0 },
+        gitlab: { total: 1, passed: 1, failed: 0 }
+      }
+    });
+
+    // A repeated HELP/TYPE block for the same metric name is malformed
+    // exposition, and some scrapers reject the whole scrape over it.
+    const typeLines = text
+      .split("\n")
+      .filter((line) => line.startsWith("# TYPE account_updater_eligibility_checks_by_provider"));
+    expect(typeLines).toHaveLength(1);
+  });
+
+  it("emits no series at all before any check has run", () => {
+    const text = toPrometheusText(emptySnapshot());
+
+    expect(text).not.toContain("account_updater_eligibility_checks_by_provider_total{");
   });
 });

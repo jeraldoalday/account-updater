@@ -120,7 +120,7 @@ async function computeEligibility(
   const eligible =
     language.passed && size.passed && historyCheck.passed && activeDevelopment.passed;
 
-  metrics.recordEligibilityCheck(eligible);
+  metrics.recordEligibilityCheck(eligible, ref.provider);
 
   const result: EligibilityResult = {
     eligible,

@@ -4,6 +4,12 @@ export interface StageDurationStats {
   maxMs: number;
 }
 
+export interface ProviderCheckStats {
+  total: number;
+  passed: number;
+  failed: number;
+}
+
 export interface MetricsSnapshot {
   requestsTotal: number;
   requestsByStatusClass: Record<string, number>;
@@ -22,6 +28,13 @@ export interface MetricsSnapshot {
   // expensive path (always a clone plus API calls) and a client looping on
   // refresh is otherwise indistinguishable from a collapsed hit rate.
   cacheRefreshes: number;
+  // The same pass/fail counts split by forge. Now that more than one is
+  // implemented, the totals alone can't answer the question an operator
+  // actually has when a pass rate moves: whether something changed about
+  // the service, or whether one provider's traffic changed shape. A
+  // provider appears here only once it has been checked, so the map stays
+  // a record of what this instance really saw.
+  eligibilityByProvider: Record<string, ProviderCheckStats>;
   // Per-stage timing of eligibility checks actually performed (a cache hit
   // records nothing here, same as eligibilityChecksTotal), so a slow check
   // is diagnosable by stage - e.g. is the clone slow, or the GitHub API -
@@ -44,6 +57,7 @@ class Metrics {
   private cacheMisses = 0;
   private cacheErrors = 0;
   private cacheRefreshes = 0;
+  private eligibilityByProvider: Record<string, ProviderCheckStats> = {};
   private stageDurations: Record<string, { count: number; totalMs: number; maxMs: number }> = {};
 
   recordRequest(statusCode: number): void {
@@ -52,10 +66,20 @@ class Metrics {
     this.requestsByStatusClass[statusClass] = (this.requestsByStatusClass[statusClass] ?? 0) + 1;
   }
 
-  recordEligibilityCheck(eligible: boolean): void {
+  recordEligibilityCheck(eligible: boolean, provider?: string): void {
     this.eligibilityChecksTotal++;
     if (eligible) this.eligibilityPassed++;
     else this.eligibilityFailed++;
+
+    // Optional so a caller that has no ref in hand - a test, or any future
+    // call site - can still count the check rather than being forced to
+    // invent a provider label that would pollute the breakdown.
+    if (provider === undefined) return;
+    const stats = this.eligibilityByProvider[provider] ?? { total: 0, passed: 0, failed: 0 };
+    stats.total++;
+    if (eligible) stats.passed++;
+    else stats.failed++;
+    this.eligibilityByProvider[provider] = stats;
   }
 
   recordCacheHit(): void {
@@ -93,6 +117,12 @@ class Metrics {
       cacheMisses: this.cacheMisses,
       cacheErrors: this.cacheErrors,
       cacheRefreshes: this.cacheRefreshes,
+      eligibilityByProvider: Object.fromEntries(
+        Object.entries(this.eligibilityByProvider).map(([provider, stats]) => [
+          provider,
+          { ...stats }
+        ])
+      ),
       stageDurations: Object.fromEntries(
         Object.entries(this.stageDurations).map(([stage, s]) => [
           stage,
@@ -116,6 +146,7 @@ class Metrics {
     this.cacheMisses = 0;
     this.cacheErrors = 0;
     this.cacheRefreshes = 0;
+    this.eligibilityByProvider = {};
     this.stageDurations = {};
   }
 }

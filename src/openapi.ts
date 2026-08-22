@@ -514,6 +514,21 @@ export const openApiSpec = {
               "being unreachable). The affected requests still succeed by computing the " +
               "result, so a non-zero value here explains a collapsed hit rate."
           },
+          eligibilityByProvider: {
+            type: "object",
+            description:
+              "The same pass/fail counts split by forge, keyed by provider id. A provider " +
+              "appears only once this instance has actually checked a repo on it, so the " +
+              "map reflects observed traffic rather than what the build supports.",
+            additionalProperties: {
+              type: "object",
+              properties: {
+                total: { type: "number" },
+                passed: { type: "number" },
+                failed: { type: "number" }
+              }
+            }
+          },
           stageDurations: {
             type: "object",
             additionalProperties: {

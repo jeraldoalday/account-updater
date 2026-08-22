@@ -17,6 +17,7 @@ describe("metrics", () => {
       cacheMisses: 0,
       cacheErrors: 0,
       cacheRefreshes: 0,
+      eligibilityByProvider: {},
       stageDurations: {}
     });
   });
@@ -90,5 +91,55 @@ describe("metrics", () => {
     expect(snapshot.cacheRefreshes).toBe(2);
     expect(snapshot.cacheHits).toBe(0);
     expect(snapshot.cacheMisses).toBe(0);
+  });
+});
+
+describe("per-provider eligibility counts", () => {
+  beforeEach(() => {
+    metrics.reset();
+  });
+
+  it("splits pass and fail by forge while still counting the totals", () => {
+    metrics.recordEligibilityCheck(true, "github");
+    metrics.recordEligibilityCheck(false, "github");
+    metrics.recordEligibilityCheck(false, "gitlab");
+
+    const snapshot = metrics.snapshot();
+    expect(snapshot.eligibilityChecksTotal).toBe(3);
+    expect(snapshot.eligibilityByProvider).toEqual({
+      github: { total: 2, passed: 1, failed: 1 },
+      gitlab: { total: 1, passed: 0, failed: 1 }
+    });
+  });
+
+  it("lists only forges this instance has actually seen", () => {
+    metrics.recordEligibilityCheck(true, "github");
+
+    // An entry for every supported provider would read as "GitLab traffic
+    // is passing at 0%" on an instance that has never been asked about a
+    // GitLab repo.
+    expect(Object.keys(metrics.snapshot().eligibilityByProvider)).toEqual(["github"]);
+  });
+
+  it("still counts a check recorded without a provider, without inventing a label", () => {
+    metrics.recordEligibilityCheck(true);
+
+    expect(metrics.snapshot().eligibilityChecksTotal).toBe(1);
+    expect(metrics.snapshot().eligibilityByProvider).toEqual({});
+  });
+
+  it("clears the breakdown on reset", () => {
+    metrics.recordEligibilityCheck(true, "gitlab");
+    metrics.reset();
+
+    expect(metrics.snapshot().eligibilityByProvider).toEqual({});
+  });
+
+  it("hands out a copy, so a caller cannot mutate the live counters", () => {
+    metrics.recordEligibilityCheck(true, "github");
+    const snapshot = metrics.snapshot();
+    snapshot.eligibilityByProvider.github.passed = 999;
+
+    expect(metrics.snapshot().eligibilityByProvider.github.passed).toBe(1);
   });
 });

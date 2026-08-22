@@ -67,6 +67,22 @@ export function toPrometheusText(snapshot: MetricsSnapshot): string {
       "Requests that asked for a recomputation, bypassing a cached result",
       snapshot.cacheRefreshes
     ),
+    "# HELP account_updater_eligibility_checks_by_provider_total Eligibility checks performed, by forge and outcome",
+    "# TYPE account_updater_eligibility_checks_by_provider_total counter",
+    // One series per (provider, outcome) rather than a separate metric per
+    // outcome: a dashboard summing over the outcome label gets the
+    // provider total, which is not something it could reconstruct the
+    // other way around.
+    ...Object.entries(snapshot.eligibilityByProvider).flatMap(([provider, stats]) => [
+      metricLine("account_updater_eligibility_checks_by_provider_total", stats.passed, {
+        provider,
+        outcome: "passed"
+      }),
+      metricLine("account_updater_eligibility_checks_by_provider_total", stats.failed, {
+        provider,
+        outcome: "failed"
+      })
+    ]),
     "# HELP account_updater_stage_duration_count_total Evaluation stage observations, by stage",
     "# TYPE account_updater_stage_duration_count_total counter",
     ...Object.entries(snapshot.stageDurations).map(([stage, stats]) =>
