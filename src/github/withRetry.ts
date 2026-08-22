@@ -1,11 +1,12 @@
 import { isRateLimitError } from "./rateLimitInfo";
+import {
+  DEFAULT_RETRY_OPTIONS,
+  retrying,
+  retryAfterSecondsToMs,
+  type RetryOptions
+} from "../net/retry";
 
-export interface RetryOptions {
-  retries: number;
-  baseDelayMs: number;
-}
-
-const DEFAULT_OPTIONS: RetryOptions = { retries: 3, baseDelayMs: 300 };
+export type { RetryOptions };
 
 interface OctokitLikeError {
   status?: number;
@@ -25,14 +26,7 @@ function isRetryable(err: unknown): boolean {
 }
 
 function retryAfterMs(err: unknown): number | null {
-  const retryAfter = (err as OctokitLikeError)?.response?.headers?.["retry-after"];
-  if (!retryAfter) return null;
-  const seconds = Number(retryAfter);
-  return Number.isFinite(seconds) ? seconds * 1000 : null;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return retryAfterSecondsToMs((err as OctokitLikeError)?.response?.headers?.["retry-after"]);
 }
 
 /**
@@ -40,20 +34,13 @@ function sleep(ms: number): Promise<void> {
  * limiting) with exponential backoff, honoring a `Retry-After` header when
  * GitHub sends one. Non-retryable errors (404, auth failures, etc.) are
  * rethrown immediately.
+ *
+ * The loop lives in src/net/retry.ts; what stays here is the part that is
+ * genuinely GitHub's - in particular the 403 judgement call above.
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  options: RetryOptions = DEFAULT_OPTIONS
+  options: RetryOptions = DEFAULT_RETRY_OPTIONS
 ): Promise<T> {
-  let attempt = 0;
-  for (;;) {
-    try {
-      return await fn();
-    } catch (err) {
-      attempt++;
-      if (attempt > options.retries || !isRetryable(err)) throw err;
-      const delay = retryAfterMs(err) ?? options.baseDelayMs * 2 ** (attempt - 1);
-      await sleep(delay);
-    }
-  }
+  return retrying(fn, { ...options, isRetryable, retryAfterMs });
 }
