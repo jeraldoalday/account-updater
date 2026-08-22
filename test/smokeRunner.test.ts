@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseRepoRef } from "../src/utils/repoUrl";
+import { supportedProviderIds } from "../src/providers/registry";
 import {
   DEFAULT_SMOKE_REPOS,
   formatSmokeReport,
@@ -227,8 +229,19 @@ describe("runSmokeTest", () => {
   it("ships with real public repos to check by default", () => {
     expect(DEFAULT_SMOKE_REPOS.length).toBeGreaterThan(0);
     for (const repo of DEFAULT_SMOKE_REPOS) {
-      expect(repo).toMatch(/^[\w.-]+\/[\w.-]+$/);
+      // Every default has to be something parseRepoRef accepts, or the
+      // smoke run fails on its own inputs rather than on the deployment.
+      expect(() => parseRepoRef(repo)).not.toThrow();
     }
+  });
+
+  it("covers every implemented forge by default", () => {
+    // The point of a smoke test is the paths the offline suites cannot
+    // reach. A default set that only names GitHub repos would pass on a
+    // deployment with no route to gitlab.com, an expired GITLAB_TOKEN, or
+    // a proxy that rewrites the API host.
+    const covered = new Set(DEFAULT_SMOKE_REPOS.map((repo) => parseRepoRef(repo).provider));
+    expect([...covered].sort()).toEqual([...supportedProviderIds()].sort());
   });
 });
 
