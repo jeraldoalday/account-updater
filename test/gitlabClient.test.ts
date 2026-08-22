@@ -180,3 +180,86 @@ describe("GitLabClient.getCommitHistorySummary", () => {
     await expect(new GitLabClient().getCommitHistorySummary(REF)).rejects.toThrow(/404/);
   });
 });
+
+describe("GitLabClient.getPushEventSummary", () => {
+  function pushEvent(date: string, commitCount: number) {
+    return { created_at: date, action_name: "pushed to", push_data: { commit_count: commitCount } };
+  }
+
+  it("summarizes push cadence across the recorded events", async () => {
+    stubApi((url) =>
+      url.pathname.endsWith("/events") && url.searchParams.get("page") === "1"
+        ? {
+            body: [
+              pushEvent("2026-06-03T10:00:00Z", 2),
+              pushEvent("2026-06-02T10:00:00Z", 1),
+              pushEvent("2026-06-02T18:00:00Z", 1)
+            ]
+          }
+        : { body: [] }
+    );
+
+    const summary = await new GitLabClient().getPushEventSummary(REF);
+
+    expect(summary.available).toBe(true);
+    expect(summary.distinctPushDays).toBe(2);
+    expect(summary.maxSinglePushCommitShare).toBeCloseTo(0.5);
+  });
+
+  it("asks only for push events, not the whole activity feed", async () => {
+    const { calls } = stubApi(() => ({ body: [] }));
+
+    await new GitLabClient().getPushEventSummary(REF);
+
+    expect(calls[0].searchParams.get("action")).toBe("pushed");
+  });
+
+  it("reports no signal, rather than failing, when the token cannot read events", async () => {
+    // GitLab requires read_api for the events endpoint even on a public
+    // project. A 403 there means the secondary signal is missing, which
+    // the checks treat as neutral - it must not fail the whole
+    // eligibility check.
+    stubApi(() => ({ body: { message: "403 Forbidden" }, status: 403 }));
+
+    const summary = await new GitLabClient().getPushEventSummary(REF);
+
+    expect(summary).toEqual({
+      available: false,
+      distinctPushDays: 0,
+      maxSinglePushCommitShare: 0
+    });
+  });
+
+  it("reports no signal for a project with no recorded activity", async () => {
+    stubApi(() => ({ body: [] }));
+
+    const summary = await new GitLabClient().getPushEventSummary(REF);
+
+    expect(summary.available).toBe(false);
+  });
+
+  it("stops at the page bound instead of walking the entire event history", async () => {
+    // Every page comes back full, so only the cap can end the loop.
+    const full = Array.from({ length: 100 }, (_, i) =>
+      pushEvent(`2026-06-${String((i % 28) + 1).padStart(2, "0")}T10:00:00Z`, 1)
+    );
+    const { calls } = stubApi(() => ({ body: full }));
+
+    await new GitLabClient().getPushEventSummary(REF);
+
+    expect(calls).toHaveLength(3);
+  });
+
+  it("treats an event with no commit count as zero rather than NaN", async () => {
+    stubApi((url) =>
+      url.searchParams.get("page") === "1"
+        ? { body: [{ created_at: "2026-06-03T10:00:00Z", push_data: null }] }
+        : { body: [] }
+    );
+
+    const summary = await new GitLabClient().getPushEventSummary(REF);
+
+    expect(summary.maxSinglePushCommitShare).toBe(0);
+    expect(summary.distinctPushDays).toBe(1);
+  });
+});
