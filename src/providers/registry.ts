@@ -1,17 +1,21 @@
 import { GitHubProvider } from "./github/githubProvider";
+import { GitLabProvider } from "./gitlab/gitlabProvider";
 import { PROVIDER_IDS, type ProviderId } from "./hosts";
 import { UnsupportedProviderError, type RepoProvider, type RepoProviderFactory } from "./provider";
 
 /**
  * The forges with a working implementation. The host table in hosts.ts is
- * intentionally wider than this map - it knows how to *name* GitLab and
- * Bitbucket so their URLs parse into a precise "not supported yet" answer
- * instead of a vague parse error. Adding a provider means implementing
- * RepoProvider and adding one entry here; nothing else in the service
- * needs to change.
+ * intentionally wider than this map - it knows how to *name* Bitbucket so
+ * its URLs parse into a precise "not supported yet" answer instead of a
+ * vague parse error.
+ *
+ * Adding GitLab was one entry here plus the provider class it names, which
+ * is what the seam was built to be worth: no eligibility check, cache key,
+ * audit row, or route learned that a second forge exists.
  */
 const FACTORIES: Partial<Record<ProviderId, RepoProviderFactory>> = {
-  github: (token) => new GitHubProvider(token)
+  github: (token) => new GitHubProvider(token),
+  gitlab: (token) => new GitLabProvider(token)
 };
 
 export function supportedProviderIds(): ProviderId[] {

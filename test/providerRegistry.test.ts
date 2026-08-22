@@ -6,6 +6,7 @@ import {
 } from "../src/providers/registry";
 import { UnsupportedProviderError } from "../src/providers/provider";
 import { GitHubProvider } from "../src/providers/github/githubProvider";
+import { GitLabProvider } from "../src/providers/gitlab/gitlabProvider";
 import { PROVIDER_IDS } from "../src/providers/hosts";
 
 // Constructing a GitHubProvider builds an Octokit instance; stub the
@@ -29,28 +30,37 @@ describe("provider registry", () => {
     expect(() => createProvider("github", "caller-token")).not.toThrow();
   });
 
+  it("builds a GitLab provider for gitlab refs", () => {
+    const provider = createProvider("gitlab");
+    expect(provider).toBeInstanceOf(GitLabProvider);
+    expect(provider.id).toBe("gitlab");
+  });
+
   it("throws a typed error naming the provider for a forge with no implementation", () => {
-    expect(() => createProvider("gitlab")).toThrow(UnsupportedProviderError);
-    expect(() => createProvider("gitlab")).toThrow(/GitLab repositories are not supported yet/);
-    expect(() => createProvider("bitbucket")).toThrow(/Bitbucket/);
+    expect(() => createProvider("bitbucket")).toThrow(UnsupportedProviderError);
+    expect(() => createProvider("bitbucket")).toThrow(
+      /Bitbucket repositories are not supported yet/
+    );
   });
 
   it("names the providers that do work in the unsupported error", () => {
     try {
-      createProvider("gitlab");
+      createProvider("bitbucket");
       expect.unreachable("createProvider should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(UnsupportedProviderError);
-      expect((err as UnsupportedProviderError).providerId).toBe("gitlab");
-      expect((err as UnsupportedProviderError).supported).toEqual(["github"]);
-      expect((err as Error).message).toContain("GitHub");
+      expect((err as UnsupportedProviderError).providerId).toBe("bitbucket");
+      expect((err as UnsupportedProviderError).supported).toEqual(["github", "gitlab"]);
+      // The caller's next move is to use a forge that works, so the error
+      // has to name them rather than only naming the one that doesn't.
+      expect((err as Error).message).toContain("GitHub, GitLab");
     }
   });
 
   it("reports exactly the providers it can build", () => {
-    expect(supportedProviderIds()).toEqual(["github"]);
+    expect(supportedProviderIds()).toEqual(["github", "gitlab"]);
     for (const id of PROVIDER_IDS) {
-      expect(isProviderSupported(id)).toBe(id === "github");
+      expect(isProviderSupported(id)).toBe(id !== "bitbucket");
     }
   });
 
@@ -59,6 +69,26 @@ describe("provider registry", () => {
     for (const id of supportedProviderIds()) {
       expect(PROVIDER_IDS).toContain(id);
     }
+  });
+});
+
+describe("GitLabProvider", () => {
+  it("satisfies the RepoProvider contract by delegating to the GitLab client", async () => {
+    const provider = new GitLabProvider();
+    const history = { commitCount: 12 };
+    const pushes = { available: false };
+
+    const client = {
+      getCommitHistorySummary: vi.fn().mockResolvedValue(history),
+      getPushEventSummary: vi.fn().mockResolvedValue(pushes)
+    };
+    (provider as unknown as { client: typeof client }).client = client;
+
+    const ref = { provider: "gitlab" as const, owner: "acme", repo: "widgets" };
+    await expect(provider.getCommitHistorySummary(ref)).resolves.toBe(history);
+    await expect(provider.getPushEventSummary(ref)).resolves.toBe(pushes);
+    expect(client.getCommitHistorySummary).toHaveBeenCalledWith(ref);
+    expect(client.getPushEventSummary).toHaveBeenCalledWith(ref);
   });
 });
 
