@@ -45,6 +45,97 @@ describe("parseRepoRef", () => {
     });
   });
 
+  it("keeps a GitLab subgroup in the namespace instead of reading it as the project", () => {
+    // The bug this closes: with the GitHub rule ("owner is the first
+    // segment, project is the second"), this URL evaluated the *group*
+    // gitlab.com/acme/platform as if it were the project - a different
+    // thing than the caller asked about, and usually a 404.
+    expect(parseRepoRef("https://gitlab.com/acme/platform/widgets")).toEqual({
+      provider: "gitlab",
+      owner: "acme/platform",
+      repo: "widgets"
+    });
+  });
+
+  it("parses a deeply nested GitLab project", () => {
+    expect(parseRepoRef("https://gitlab.com/acme/platform/team/widgets.git")).toEqual({
+      provider: "gitlab",
+      owner: "acme/platform/team",
+      repo: "widgets"
+    });
+  });
+
+  it("stops at GitLab's /-/ separator, which marks a page within the project", () => {
+    // This is the URL shape a caller actually copies out of the browser.
+    expect(parseRepoRef("https://gitlab.com/acme/platform/widgets/-/tree/main")).toEqual({
+      provider: "gitlab",
+      owner: "acme/platform",
+      repo: "widgets"
+    });
+  });
+
+  it("parses a nested GitLab project from an ssh URL too", () => {
+    expect(parseRepoRef("git@gitlab.com:acme/platform/widgets.git")).toEqual({
+      provider: "gitlab",
+      owner: "acme/platform",
+      repo: "widgets"
+    });
+  });
+
+  it("allows the dots and underscores GitLab group paths really contain", () => {
+    expect(parseRepoRef("https://gitlab.com/acme.io/sub_group/widgets")).toEqual({
+      provider: "gitlab",
+      owner: "acme.io/sub_group",
+      repo: "widgets"
+    });
+  });
+
+  it("rejects a traversal segment in the ssh form, which nothing normalizes", () => {
+    // Nesting widens what a namespace may contain, so the traversal guard
+    // has to be applied per segment rather than to the joined string. The
+    // ssh form is where it earns its keep: unlike an https URL, nothing
+    // has already collapsed ".." out of the path by the time it arrives.
+    expect(() => parseRepoRef("git@gitlab.com:acme/../evil/widgets.git")).toThrow();
+    expect(() => parseRepoRef("git@gitlab.com:acme/./widgets.git")).toThrow();
+  });
+
+  it("rejects a namespace segment that does not start alphanumeric", () => {
+    expect(() => parseRepoRef("https://gitlab.com/-evil/widgets")).toThrow();
+    expect(() => parseRepoRef("https://gitlab.com/acme/-evil/widgets")).toThrow();
+  });
+
+  it("resolves a traversal in an https URL rather than parsing the dots", () => {
+    // WHATWG URL parsing collapses these before we see them, so the result
+    // is an ordinary ref for the path that was actually named - worth
+    // pinning, because it looks like the guard above is what rejected it.
+    expect(parseRepoRef("https://gitlab.com/acme/../platform/widgets")).toEqual({
+      provider: "gitlab",
+      owner: "platform",
+      repo: "widgets"
+    });
+  });
+
+  it("rejects a namespace nested past GitLab's own depth limit", () => {
+    const tooDeep = Array.from({ length: 25 }, (_, i) => `g${i}`).join("/");
+    expect(() => parseRepoRef(`https://gitlab.com/${tooDeep}/widgets`)).toThrow();
+  });
+
+  it("still reads extra GitHub path segments as a page, not as a namespace", () => {
+    // GitHub has no nested owners, so /tree/main is a view of the repo.
+    expect(parseRepoRef("https://github.com/octocat/hello-world/tree/main")).toEqual({
+      provider: "github",
+      owner: "octocat",
+      repo: "hello-world"
+    });
+  });
+
+  it("rejects a three-part shorthand, which names no provider that allows nesting", () => {
+    // Bare shorthand means the default provider, and GitHub has no
+    // subgroups - guessing GitLab from the shape would be worse than
+    // asking for a URL.
+    expect(() => parseRepoRef("acme/platform/widgets")).toThrow();
+  });
+
   it("parses a Bitbucket ssh URL as the bitbucket provider", () => {
     expect(parseRepoRef("git@bitbucket.org:octocat/hello-world.git")).toEqual({
       provider: "bitbucket",

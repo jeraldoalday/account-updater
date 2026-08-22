@@ -29,6 +29,18 @@ export interface ProviderHostSpec {
    * is per-provider data rather than a constant.
    */
   cloneTokenUser: string;
+  /**
+   * Whether a project can live under nested groups, so that the part of
+   * the path before the project name may itself contain slashes
+   * ("group/subgroup/team/project"). True only for GitLab.
+   *
+   * This is not cosmetic: on a forge without nesting, everything after the
+   * second path segment is a page within the repo ("/tree/main"), and on
+   * GitLab it is part of the project's identity. Reading a GitLab URL with
+   * the GitHub rule silently evaluates a different project than the one
+   * asked about.
+   */
+  supportsNestedNamespaces: boolean;
 }
 
 export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
@@ -38,7 +50,8 @@ export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
     host: "github.com",
     hostPattern: /^(?:[a-z0-9-]+\.)*github\.com$/i,
     sshPrefix: "git@github.com:",
-    cloneTokenUser: "x-access-token"
+    cloneTokenUser: "x-access-token",
+    supportsNestedNamespaces: false
   },
   gitlab: {
     id: "gitlab",
@@ -46,7 +59,8 @@ export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
     host: "gitlab.com",
     hostPattern: /^(?:[a-z0-9-]+\.)*gitlab\.com$/i,
     sshPrefix: "git@gitlab.com:",
-    cloneTokenUser: "oauth2"
+    cloneTokenUser: "oauth2",
+    supportsNestedNamespaces: true
   },
   bitbucket: {
     id: "bitbucket",
@@ -54,7 +68,8 @@ export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
     host: "bitbucket.org",
     hostPattern: /^(?:[a-z0-9-]+\.)*bitbucket\.org$/i,
     sshPrefix: "git@bitbucket.org:",
-    cloneTokenUser: "x-token-auth"
+    cloneTokenUser: "x-token-auth",
+    supportsNestedNamespaces: false
   }
 };
 

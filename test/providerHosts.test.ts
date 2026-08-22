@@ -137,3 +137,23 @@ describe("provider host table", () => {
     }
   });
 });
+
+describe("nested namespaces", () => {
+  it("builds a clone URL for a nested GitLab project", () => {
+    expect(cloneUrlFor({ provider: "gitlab", owner: "acme/platform", repo: "widgets" })).toBe(
+      "https://gitlab.com/acme/platform/widgets.git"
+    );
+  });
+
+  it("describes a nested project by its full path", () => {
+    expect(describeRef({ provider: "gitlab", owner: "acme/platform", repo: "widgets" })).toBe(
+      "gitlab.com/acme/platform/widgets"
+    );
+  });
+
+  it("marks only GitLab as allowing nested groups", () => {
+    expect(PROVIDER_HOSTS.gitlab.supportsNestedNamespaces).toBe(true);
+    expect(PROVIDER_HOSTS.github.supportsNestedNamespaces).toBe(false);
+    expect(PROVIDER_HOSTS.bitbucket.supportsNestedNamespaces).toBe(false);
+  });
+});
