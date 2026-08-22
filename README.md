@@ -44,7 +44,7 @@ fails.
 ## Running
 
 ```bash
-cp .env.example .env   # set GITHUB_TOKEN for higher rate limits / private repos
+cp .env.example .env   # set GITHUB_TOKEN / GITLAB_TOKEN: higher rate limits, private repos
 npm install
 npm run dev             # or: npm run build && npm start
 ```
@@ -134,9 +134,10 @@ would otherwise look perfectly healthy while paying full clone and API
 cost on every request.
 
 `GET /metrics` returns in-memory counters (request volume by status class,
-eligibility pass/fail counts, cache hit/miss counts, and per-stage
-count/avg/max duration for each evaluation stage - clone+scan, commit
-history, push events - so a slow check is diagnosable by stage) —
+eligibility pass/fail counts both in total and split by forge, cache
+hit/miss counts, and per-stage count/avg/max duration for each evaluation
+stage - clone+scan, commit history, push events - so a slow check is
+diagnosable by stage) —
 per-process only, not aggregated across instances. The same data is also
 available at `GET /metrics/prometheus` in Prometheus's text exposition
 format, for scraping directly instead of polling the JSON endpoint.
@@ -244,9 +245,21 @@ assuming GitHub. Two lists matter, and they're deliberately different:
 
 - **Recognized** (`src/providers/hosts.ts`): GitHub, GitLab, Bitbucket. A
   URL on any of these parses into a `{ provider, owner, repo }` reference.
-- **Implemented** (`src/providers/registry.ts`): GitHub only. A recognized
-  but unimplemented provider is rejected with a 400 naming it, rather than
-  a parse error or a 502 that invites a pointless retry.
+- **Implemented** (`src/providers/registry.ts`): GitHub and GitLab. A
+  recognized but unimplemented provider (Bitbucket) is rejected with a 400
+  naming it, rather than a parse error or a 502 that invites a pointless
+  retry.
+
+GitLab projects can live under nested groups, so a GitLab reference's owner
+may itself contain slashes (`acme/platform/widgets` is the project
+`widgets` in the group `acme/platform`). URLs copied out of the GitLab UI
+work as-is: parsing stops at the `/-/` segment GitLab uses to separate a
+project path from a view of it. GitHub and Bitbucket keep the old rule,
+where anything past the repo name is a page within the repo.
+
+Credentials are per-forge: `GITHUB_TOKEN` (or a GitHub App installation)
+and `GITLAB_TOKEN`. Neither is ever sent to the other forge's API. A
+per-request `token` is used for whichever provider the request names.
 
 Adding a forge means writing a `RepoProvider` — a commit-history summary
 and a push-event summary, the only two things the eligibility checks need
@@ -270,8 +283,16 @@ signal as neutral rather than disqualifying.
   in non-push activity, so `pushEvents.available` may be `true` with zero
   observed pushes for older or very active repos; the eligibility decision
   never depends on push-event data being present.
-- GitLab and Bitbucket URLs parse but cannot be evaluated yet — only the
-  seam exists, not an implementation.
+- Bitbucket URLs parse but cannot be evaluated yet — the seam exists,
+  without an implementation behind it.
+- GitLab reports a project's exact commit count in a pagination header, but
+  omits it for very large result sets. When that happens the count falls
+  back to the bounded commit sample, which understates it — deliberately
+  the safe direction, since the count is a minimum a repo shouldn't clear
+  on a number the service could not verify.
+- GitLab's events API needs `read_api` even for a public project, so a
+  token without it makes the push-cadence signal unavailable rather than
+  wrong. As with GitHub, a missing signal is treated as neutral.
 - The size/line-count check counts raw lines (including blank lines and
   comments) in files under the five eligible languages' extensions, and
   skips any single file over 2 MB — well above hand-written source, so what

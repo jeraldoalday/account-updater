@@ -107,10 +107,23 @@ checks. Implement it and add one entry to the registry in
 `src/providers/registry.ts`; the file-tree half needs nothing, because it's
 a plain `git clone` against a URL built from the provider's host entry.
 
+GitLab was added this way and cost exactly that: a client, a provider
+class, and a registry entry. No check, cache key, audit row, route, or
+clone path changed. The one thing outside the seam that did need work was
+URL parsing — GitLab has nested groups, so "the owner is the first path
+segment" is a GitHub rule rather than a universal one, and the host table
+now carries a `supportsNestedNamespaces` flag that path splitting follows.
+
 Note the split between _naming_ a forge and _supporting_ one: `hosts.ts`
-knows GitLab and Bitbucket so their URLs parse into a precise "not
-supported yet" 400, rather than a confusing parse error or a 502 that
-invites the caller to retry something that can never succeed.
+knows Bitbucket so its URLs parse into a precise "not supported yet" 400,
+rather than a confusing parse error or a 502 that invites the caller to
+retry something that can never succeed.
+
+The transport under a provider is its own choice. GitHub uses Octokit;
+GitLab uses `src/net/httpJson.ts`, a fetch wrapper that returns response
+headers alongside the body and raises errors shaped like Octokit's, so
+shared rate-limit handling and retry scheduling (`src/net/`) work for both
+without knowing which forge produced an error.
 
 **Adding a cache backend.** Implement `Cache<V>` (`src/cache/cache.ts`) and
 add it to `createCache()`. `ping()` exists so `GET /ready` can report on the
@@ -124,8 +137,11 @@ the weights for the blended score. They are read once at startup.
 Everything a caller sends is untrusted, and two things in this service take
 that seriously in particular.
 
-**Clone targets.** `parseRepoRef()` validates owner and repo against
-GitHub's naming rules (the strictest of the supported forges) and resolves
+**Clone targets.** `parseRepoRef()` validates the repo name against
+GitHub's naming rules (the strictest of the supported forges), validates
+each namespace segment individually — so a nested GitLab group is checked
+link by link, and no segment can contain a slash, be "." or "..", or start
+with anything but an alphanumeric — and resolves
 the host against a fixed table of known code hosts. Clone URLs are then
 _rebuilt_ from the provider's canonical host rather than passed through, so
 a crafted URL — embedded userinfo, an unknown host, a non-https scheme —
