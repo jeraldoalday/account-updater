@@ -21,6 +21,15 @@ const configSchema = z
     githubAppId: z.string().optional(),
     githubAppPrivateKey: z.string().optional(),
     githubAppInstallationId: z.coerce.number().int().positive().optional(),
+    // GitLab personal or project access token, used the same way
+    // githubToken is: as the fallback credential when a request supplies
+    // none of its own. Unauthenticated GitLab API calls are allowed but
+    // heavily throttled, and private projects are invisible without one.
+    gitlabToken: z.string().optional(),
+    // Ceiling on a single outbound provider API call. Deliberately shared
+    // rather than per-provider: it exists to stop one hung upstream from
+    // holding a request open, and that concern doesn't vary by forge.
+    providerRequestTimeoutMs: z.coerce.number().int().positive().default(10_000),
     // When set, callers must send a matching `x-api-key` header. Unset by
     // default so local development doesn't require one.
     apiKey: z.string().optional(),
@@ -91,6 +100,8 @@ function loadConfig() {
     githubAppId: optionalEnv("GITHUB_APP_ID"),
     githubAppPrivateKey: optionalEnv("GITHUB_APP_PRIVATE_KEY"),
     githubAppInstallationId: optionalEnv("GITHUB_APP_INSTALLATION_ID"),
+    gitlabToken: optionalEnv("GITLAB_TOKEN"),
+    providerRequestTimeoutMs: optionalEnv("PROVIDER_REQUEST_TIMEOUT_MS"),
     apiKey: optionalEnv("API_KEY"),
     cacheTtlMs: optionalEnv("CACHE_TTL_MS"),
     cacheBackend: optionalEnv("CACHE_BACKEND"),

@@ -6,6 +6,8 @@ const ENV_KEYS = [
   "GITHUB_APP_ID",
   "GITHUB_APP_PRIVATE_KEY",
   "GITHUB_APP_INSTALLATION_ID",
+  "GITLAB_TOKEN",
+  "PROVIDER_REQUEST_TIMEOUT_MS",
   "API_KEY",
   "CACHE_TTL_MS",
   "CACHE_BACKEND",
@@ -43,6 +45,26 @@ describe("config", () => {
     expect(config.cacheBackend).toBe("memory");
     expect(config.redisUrl).toBeUndefined();
     expect(config.historyDbPath).toBe("./data/history.db");
+    expect(config.gitlabToken).toBeUndefined();
+    expect(config.providerRequestTimeoutMs).toBe(10_000);
+  });
+
+  it("reads a GitLab token independently of the GitHub one", async () => {
+    // The two forges are configured separately on purpose: a deployment
+    // that only ever sees GitHub repos shouldn't have to invent a GitLab
+    // credential, and one that sees both must not have either token
+    // silently used against the other's API.
+    const { config } = await loadConfigWith({ GITLAB_TOKEN: "glpat-example" });
+    expect(config.gitlabToken).toBe("glpat-example");
+    expect(config.githubToken).toBeUndefined();
+  });
+
+  it("rejects a provider timeout that would disable the timeout entirely", async () => {
+    // 0 means "no ceiling" to most timer APIs, which is the opposite of
+    // what setting a timeout is for.
+    await expect(loadConfigWith({ PROVIDER_REQUEST_TIMEOUT_MS: "0" })).rejects.toThrow(
+      /providerRequestTimeoutMs/
+    );
   });
 
   it("treats blank env values the same as unset", async () => {
