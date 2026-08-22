@@ -64,6 +64,16 @@ claim into a tested one.
   immediately" instead of as absent, defeating the backoff it was meant to
   pace.
 
+### Security
+
+- The default credential is now resolved from the ref's forge instead of
+  being applied before the forge is known. The HTTP layer defaulted every
+  request to `GITHUB_TOKEN`, which was harmless while every reference was
+  a GitHub one — and would have sent a GitHub token to `gitlab.com`, as an
+  API header and inside the clone URL, the first time a GitLab repo was
+  evaluated. A forge with no configured credential is now called
+  unauthenticated rather than with another forge's secret.
+
 ## [1.0.0] - 2026-08-20
 
 First tagged release. The service has been feature-complete for its

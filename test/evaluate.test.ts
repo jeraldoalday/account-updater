@@ -24,6 +24,11 @@ vi.mock("../src/analysis/sourceScan", () => ({
   scanSource: (...args: unknown[]) => scanSource(...args)
 }));
 
+vi.mock("../src/providers/credentials", () => ({
+  defaultTokenFor: (providerId: string) =>
+    ({ github: "ghp_configured", gitlab: "glpat_configured" })[providerId]
+}));
+
 vi.mock("../src/history/createHistoryStore", () => ({
   createHistoryStore: () => ({ record: (...args: unknown[]) => recordHistory(...args) })
 }));
@@ -151,14 +156,47 @@ describe("evaluateEligibility caching", () => {
     await evaluateEligibility(gitlabRef, undefined, { cacheable: true });
 
     expect(withShallowClone).toHaveBeenCalledTimes(2);
-    expect(createProvider).toHaveBeenNthCalledWith(1, "github", undefined);
-    expect(createProvider).toHaveBeenNthCalledWith(2, "gitlab", undefined);
+    expect(createProvider).toHaveBeenNthCalledWith(1, "github", "ghp_configured");
+    expect(createProvider).toHaveBeenNthCalledWith(2, "gitlab", "glpat_configured");
   });
 
   it("builds the provider from the ref and the caller's token", async () => {
     const ref = { provider: "github" as const, owner: "token-test", repo: "repo" };
     await evaluateEligibility(ref, "caller-token", { cacheable: false });
     expect(createProvider).toHaveBeenCalledWith("github", "caller-token");
+  });
+
+  it("falls back to the credential configured for the ref's own forge", async () => {
+    const ref = { provider: "gitlab" as const, owner: "default-token", repo: "repo" };
+
+    await evaluateEligibility(ref, undefined, { cacheable: false });
+
+    expect(createProvider).toHaveBeenCalledWith("gitlab", "glpat_configured");
+  });
+
+  it("never sends one forge's configured token to another", async () => {
+    // The bug this guards: the HTTP layer used to default every request to
+    // GITHUB_TOKEN before the provider was known, so evaluating a GitLab
+    // repo shipped a GitHub PAT to gitlab.com - as an API header and
+    // inside the clone URL.
+    const ref = { provider: "gitlab" as const, owner: "leak-check", repo: "repo" };
+
+    await evaluateEligibility(ref, undefined, { cacheable: false });
+
+    const [, providerToken] = createProvider.mock.calls.at(-1) as [string, string | undefined];
+    const [, cloneToken] = withShallowClone.mock.calls.at(-1) as [unknown, string | undefined];
+    expect(providerToken).not.toBe("ghp_configured");
+    expect(cloneToken).not.toBe("ghp_configured");
+    expect(cloneToken).toBe("glpat_configured");
+  });
+
+  it("clones with the same credential the provider was built with", async () => {
+    const ref = { provider: "github" as const, owner: "clone-token", repo: "repo" };
+
+    await evaluateEligibility(ref, "caller-token", { cacheable: false });
+
+    const [, cloneToken] = withShallowClone.mock.calls.at(-1) as [unknown, string | undefined];
+    expect(cloneToken).toBe("caller-token");
   });
 
   it("does not start clone or API work when the provider is unsupported", async () => {

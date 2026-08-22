@@ -6,7 +6,6 @@ import { extractRateLimitInfo, type RateLimitInfo } from "../net/rateLimitInfo";
 import { UnsupportedProviderError } from "../providers/provider";
 import { describeRef } from "../providers/hosts";
 import { mapWithConcurrency } from "../utils/concurrency";
-import { config } from "../config";
 import type { EligibilityResult, RepoRef } from "../types";
 
 const REPO_REQUIRED_MESSAGE = 'repo is required (e.g. "owner/name" or a GitHub URL)';
@@ -94,7 +93,11 @@ eligibilityRouter.post("/check", async (req, res) => {
     return;
   }
 
-  const token = parsed.data.token ?? config.githubToken;
+  // Deliberately not defaulted here: which configured credential applies
+  // depends on the ref's forge, and this layer has no business sending a
+  // GitHub token to GitLab. evaluateEligibility() resolves the default
+  // once it knows the provider.
+  const token = parsed.data.token;
   // Never cache a result computed with a caller-supplied token — it may
   // reflect access to a private repo that other callers don't have.
   const cacheable = !parsed.data.token;
@@ -121,7 +124,7 @@ eligibilityRouter.post("/check-batch", async (req, res) => {
     return;
   }
 
-  const token = parsed.data.token ?? config.githubToken;
+  const token = parsed.data.token;
   const cacheable = !parsed.data.token;
 
   const results = await mapWithConcurrency(

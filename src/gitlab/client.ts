@@ -46,10 +46,11 @@ export class GitLabClient {
   private readonly token?: string;
 
   constructor(token?: string) {
-    // Falls back to the configured token the same way the GitHub client
-    // does: a caller-supplied token is for their own private project, and
-    // the shared one is what the service uses otherwise.
-    this.token = token ?? config.gitlabToken;
+    // No fallback to the configured token here: the default is resolved
+    // once, from the ref's provider, in evaluateEligibility(). Resolving
+    // it in two places is how one of them ends up reaching for the wrong
+    // forge's credential.
+    this.token = token;
   }
 
   private url(ref: RepoRef, path: string, query: Record<string, string>): string {

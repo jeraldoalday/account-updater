@@ -8,6 +8,7 @@ import { createCache } from "../cache/createCache";
 import { createHistoryStore } from "../history/createHistoryStore";
 import { metrics } from "../metrics/metrics";
 import { createProvider } from "../providers/registry";
+import { defaultTokenFor } from "../providers/credentials";
 import { describeRef } from "../providers/hosts";
 import type { EligibilityResult, RepoRef } from "../types";
 
@@ -85,14 +86,22 @@ async function computeEligibility(
   ref: RepoRef,
   token: string | undefined
 ): Promise<EligibilityResult> {
+  // A caller-supplied token wins; otherwise the credential configured for
+  // *this ref's* forge is used. Resolved here rather than at the HTTP
+  // layer, which cannot default a token without knowing which forge it
+  // would be sent to - see defaultTokenFor().
+  const effectiveToken = token ?? defaultTokenFor(ref.provider);
+
   // Throws UnsupportedProviderError for a forge that parses but has no
   // implementation yet - before any clone or API work is started, so an
   // unsupported ref costs nothing.
-  const provider = createProvider(ref.provider, token);
+  const provider = createProvider(ref.provider, effectiveToken);
   const overallStart = process.hrtime.bigint();
 
   const [scan, history, pushEvents] = await Promise.all([
-    timedStage("cloneAndScan", () => withShallowClone(ref, token, (dir) => scanSource(dir))),
+    timedStage("cloneAndScan", () =>
+      withShallowClone(ref, effectiveToken, (dir) => scanSource(dir))
+    ),
     timedStage("commitHistory", () => provider.getCommitHistorySummary(ref)),
     timedStage("pushEvents", () => provider.getPushEventSummary(ref))
   ]);
