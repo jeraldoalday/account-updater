@@ -30,7 +30,7 @@ const resultCache = createCache<EligibilityResult>();
 // Coalesces concurrent cache-miss requests for the same repo into a single
 // computeEligibility() call. Without this, a burst of requests for a repo
 // that isn't cached yet (e.g. several callers checking the same new repo at
-// once) would each independently clone it and hit the GitHub API. Scoped to
+// once) would each independently clone it and hit the provider API. Scoped to
 // this process only — complementary to, not a replacement for, the shared
 // Redis cache backend.
 const inFlight = new Map<string, Promise<EligibilityResult>>();
@@ -109,7 +109,8 @@ async function computeEligibility(
   // Diagnoses which stage a slow check spent its time in, since the three
   // calls above run concurrently and a naive "total request time" figure
   // alone can't tell you that apart (e.g. a huge repo's clone vs. a slow
-  // GitHub API response).
+  // provider API response - and Bitbucket's history call walks pages in
+  // sequence, so it is the slowest of the three by construction).
   console.log(
     JSON.stringify({
       level: "info",

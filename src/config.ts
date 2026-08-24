@@ -60,8 +60,8 @@ const configSchema = z
       .int()
       .positive()
       .default(6 * 60 * 60 * 1000),
-    // Applies to /eligibility, the endpoint that clones a repo and calls the
-    // GitHub API, so it's the one worth protecting from abuse.
+    // Applies to /eligibility, the endpoint that clones a repo and calls a
+    // provider's API, so it's the one worth protecting from abuse.
     rateLimitWindowMs: z.coerce
       .number()
       .int()

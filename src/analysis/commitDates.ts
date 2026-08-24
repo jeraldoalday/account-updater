@@ -9,8 +9,10 @@
  */
 
 /**
- * ISO-8601, which is what both `git log --pretty=%aI` and the GitHub API
- * emit: a calendar date, optionally followed by a time and a zone.
+ * ISO-8601, which is what `git log --pretty=%aI` and every provider API
+ * this service reads emit: a calendar date, optionally followed by a time
+ * and a zone. Note the zone really does vary - GitHub sends "Z", Bitbucket
+ * sends "+00:00" - so the offset forms are not hypothetical.
  *
  * Matching this explicitly matters, because `new Date()` alone is not a
  * validity test - V8's fallback parser accepts strings like "garbage-1"

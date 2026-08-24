@@ -388,8 +388,9 @@ export const openApiSpec = {
           token: {
             type: "string",
             description:
-              "Optional per-request provider token, overriding GITHUB_TOKEN. Results " +
-              "computed with it are never cached."
+              "Optional per-request token for whichever forge the `repo` names, " +
+              "overriding that forge's configured credential. Results computed with it " +
+              "are never cached."
           },
           refresh: {
             type: "boolean",

@@ -45,11 +45,12 @@ function summarizeAuthors(authorKeys: readonly (string | null)[]): AuthorStats {
   };
 }
 
-// Turns a page-sampled batch of commits (bounded for cost - see
-// GitHubClient's COMMIT_SAMPLE_CAP) into the day/author/message
-// distributions the active-development heuristics score against. Kept pure
-// and separate from the Octokit-calling code so it's testable without
-// mocking the GitHub API.
+// Turns a page-sampled batch of commits (bounded for cost - every client
+// has its own COMMIT_SAMPLE_CAP) into the day/author/message distributions
+// the active-development heuristics score against. Kept pure and separate
+// from the code that calls a provider API, so it is testable without
+// mocking any of them - and so all three forges are summarized by the same
+// arithmetic rather than by three near-copies of it.
 export function summarizeCommitSample(commits: readonly SampledCommit[]): CommitSampleSummary {
   const commitsByDay: Record<string, number> = {};
   let sampled = 0;

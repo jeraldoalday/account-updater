@@ -8,9 +8,10 @@ import { describeRef, providerDisplayName } from "../providers/hosts";
 import { mapWithConcurrency } from "../utils/concurrency";
 import type { EligibilityResult, RepoRef } from "../types";
 
-const REPO_REQUIRED_MESSAGE = 'repo is required (e.g. "owner/name" or a GitHub URL)';
+const REPO_REQUIRED_MESSAGE =
+  'repo is required (e.g. "owner/name", or a URL on any recognized forge)';
 
-// Each repo in a batch clones the repo and hits the GitHub API, so both
+// Each repo in a batch clones the repo and hits a provider API, so both
 // caps exist to keep a single request from being able to trigger unbounded
 // work.
 const MAX_BATCH_SIZE = 20;
@@ -18,8 +19,9 @@ const BATCH_CONCURRENCY = 3;
 
 const requestSchema = z.object({
   repo: z.string({ required_error: REPO_REQUIRED_MESSAGE }).min(1, REPO_REQUIRED_MESSAGE),
-  // Optional per-request token, e.g. the connecting user's own GitHub OAuth
-  // token, so private repos can be evaluated without a shared server token.
+  // Optional per-request token for whichever forge the ref names, e.g. the
+  // connecting user's own OAuth token, so private repos can be evaluated
+  // without a shared server token.
   token: z.string().optional(),
   // Recompute instead of answering from cache. For the caller who has just
   // fixed what their repo was rejected for: without it the only remedy is

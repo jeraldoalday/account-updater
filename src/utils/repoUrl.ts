@@ -8,9 +8,10 @@ import {
 import type { RepoRef } from "../types";
 
 // Mirrors GitHub's actual owner/repo naming rules, and is applied to every
-// provider: it's the strictest of the set, so it can only ever reject a
-// name a laxer forge would allow (GitLab subgroups, for instance, which
-// this service doesn't support yet either way). Validating against these
+// provider whose namespace is a single segment: it's the strictest of the
+// set, so it can only ever reject a name a laxer forge would allow.
+// (GitLab, whose groups nest, is validated segment by segment instead -
+// see isValidNamespace.) Validating against these
 // - rather than accepting anything without a "/" - closes off malformed
 // values, e.g. a URL path segment like "@evil.com" or embedded control
 // characters, well before they ever reach `git clone` or a provider API,

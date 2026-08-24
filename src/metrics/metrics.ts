@@ -37,7 +37,7 @@ export interface MetricsSnapshot {
   eligibilityByProvider: Record<string, ProviderCheckStats>;
   // Per-stage timing of eligibility checks actually performed (a cache hit
   // records nothing here, same as eligibilityChecksTotal), so a slow check
-  // is diagnosable by stage - e.g. is the clone slow, or the GitHub API -
+  // is diagnosable by stage - e.g. is the clone slow, or the provider API -
   // rather than only visible as one opaque total duration.
   stageDurations: Record<string, StageDurationStats>;
 }
