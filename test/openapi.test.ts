@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openApiSpec } from "../src/openapi";
+import { openApiSpec, providerSupportSentence } from "../src/openapi";
 import { metrics } from "../src/metrics/metrics";
 import { toPrometheusText } from "../src/metrics/prometheusFormat";
 import { PROVIDER_IDS } from "../src/providers/hosts";
@@ -77,6 +77,26 @@ describe("openApiSpec", () => {
     }
     for (const id of PROVIDER_IDS) {
       expect(openApiSpec.info.description).toContain(id);
+    }
+    expect(openApiSpec.info.description).toContain(providerSupportSentence());
+  });
+
+  it("only calls out a gap between recognized and implemented when there is one", () => {
+    // "implemented for github, gitlab, bitbucket only" - when those are
+    // also the only recognized forges - reads like a limitation that
+    // doesn't exist, and tells a caller nothing.
+    const all = PROVIDER_IDS.join(", ");
+    const gap = PROVIDER_IDS.filter((id) => !supportedProviderIds().includes(id));
+
+    if (gap.length === 0) {
+      expect(providerSupportSentence()).toBe(
+        `Repo references on ${all} are recognized and evaluated.`
+      );
+      expect(providerSupportSentence()).not.toContain("only");
+    } else {
+      expect(providerSupportSentence()).toContain(
+        `implemented for ${supportedProviderIds().join(", ")} only`
+      );
     }
   });
 

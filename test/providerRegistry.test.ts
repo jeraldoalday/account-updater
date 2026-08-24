@@ -7,7 +7,8 @@ import {
 import { UnsupportedProviderError } from "../src/providers/provider";
 import { GitHubProvider } from "../src/providers/github/githubProvider";
 import { GitLabProvider } from "../src/providers/gitlab/gitlabProvider";
-import { PROVIDER_IDS } from "../src/providers/hosts";
+import { BitbucketProvider } from "../src/providers/bitbucket/bitbucketProvider";
+import { PROVIDER_IDS, type ProviderId } from "../src/providers/hosts";
 
 // Constructing a GitHubProvider builds an Octokit instance; stub the
 // network layer away so these tests stay offline and fast.
@@ -36,31 +37,40 @@ describe("provider registry", () => {
     expect(provider.id).toBe("gitlab");
   });
 
+  it("builds a Bitbucket provider for bitbucket refs", () => {
+    const provider = createProvider("bitbucket");
+    expect(provider).toBeInstanceOf(BitbucketProvider);
+    expect(provider.id).toBe("bitbucket");
+  });
+
   it("throws a typed error naming the provider for a forge with no implementation", () => {
-    expect(() => createProvider("bitbucket")).toThrow(UnsupportedProviderError);
-    expect(() => createProvider("bitbucket")).toThrow(
-      /Bitbucket repositories are not supported yet/
-    );
+    // Every forge the host table names is implemented today, so this is
+    // the seam rather than a live case: a forge can be recognized - its
+    // URLs parsed, its clone host known - before it can be evaluated, and
+    // a caller who asks for one gets a 400 that says so rather than a 502.
+    // Exercised with an id that has no factory, which is exactly the state
+    // the next forge will be added in.
+    const future = "codeberg" as ProviderId;
+    expect(() => createProvider(future)).toThrow(UnsupportedProviderError);
   });
 
   it("names the providers that do work in the unsupported error", () => {
     try {
-      createProvider("bitbucket");
-      expect.unreachable("createProvider should have thrown");
+      throw new UnsupportedProviderError("bitbucket", ["github", "gitlab"]);
     } catch (err) {
       expect(err).toBeInstanceOf(UnsupportedProviderError);
       expect((err as UnsupportedProviderError).providerId).toBe("bitbucket");
-      expect((err as UnsupportedProviderError).supported).toEqual(["github", "gitlab"]);
       // The caller's next move is to use a forge that works, so the error
       // has to name them rather than only naming the one that doesn't.
       expect((err as Error).message).toContain("GitHub, GitLab");
+      expect((err as Error).message).toMatch(/Bitbucket repositories are not supported yet/);
     }
   });
 
   it("reports exactly the providers it can build", () => {
-    expect(supportedProviderIds()).toEqual(["github", "gitlab"]);
+    expect(supportedProviderIds()).toEqual(["github", "gitlab", "bitbucket"]);
     for (const id of PROVIDER_IDS) {
-      expect(isProviderSupported(id)).toBe(id !== "bitbucket");
+      expect(isProviderSupported(id)).toBe(true);
     }
   });
 
@@ -107,6 +117,26 @@ describe("GitHubProvider", () => {
     (provider as unknown as { client: typeof client }).client = client;
 
     const ref = { provider: "github" as const, owner: "octocat", repo: "hello" };
+    await expect(provider.getCommitHistorySummary(ref)).resolves.toBe(history);
+    await expect(provider.getPushEventSummary(ref)).resolves.toBe(pushes);
+    expect(client.getCommitHistorySummary).toHaveBeenCalledWith(ref);
+    expect(client.getPushEventSummary).toHaveBeenCalledWith(ref);
+  });
+});
+
+describe("BitbucketProvider", () => {
+  it("satisfies the RepoProvider contract by delegating to the Bitbucket client", async () => {
+    const provider = new BitbucketProvider();
+    const history = { commitCount: 42 };
+    const pushes = { available: false };
+
+    const client = {
+      getCommitHistorySummary: vi.fn().mockResolvedValue(history),
+      getPushEventSummary: vi.fn().mockResolvedValue(pushes)
+    };
+    (provider as unknown as { client: typeof client }).client = client;
+
+    const ref = { provider: "bitbucket" as const, owner: "acme", repo: "widgets" };
     await expect(provider.getCommitHistorySummary(ref)).resolves.toBe(history);
     await expect(provider.getPushEventSummary(ref)).resolves.toBe(pushes);
     expect(client.getCommitHistorySummary).toHaveBeenCalledWith(ref);

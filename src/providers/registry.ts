@@ -1,21 +1,29 @@
+import { BitbucketProvider } from "./bitbucket/bitbucketProvider";
 import { GitHubProvider } from "./github/githubProvider";
 import { GitLabProvider } from "./gitlab/gitlabProvider";
 import { PROVIDER_IDS, type ProviderId } from "./hosts";
 import { UnsupportedProviderError, type RepoProvider, type RepoProviderFactory } from "./provider";
 
 /**
- * The forges with a working implementation. The host table in hosts.ts is
- * intentionally wider than this map - it knows how to *name* Bitbucket so
- * its URLs parse into a precise "not supported yet" answer instead of a
- * vague parse error.
+ * The forges with a working implementation - now every forge the host
+ * table names.
  *
- * Adding GitLab was one entry here plus the provider class it names, which
- * is what the seam was built to be worth: no eligibility check, cache key,
- * audit row, or route learned that a second forge exists.
+ * Adding each of the last two was one entry here plus the provider class
+ * it names, which is what the seam was built to be worth: no eligibility
+ * check, cache key, audit row, or route learned that a second or third
+ * forge exists.
+ *
+ * The map stays partial, and UnsupportedProviderError with it, even though
+ * nothing is unsupported today. That pairing is what lets a forge be
+ * *recognized* before it is *implemented*: a URL for it parses into a
+ * precise "not supported yet" answer, with a 400 rather than a 502,
+ * instead of a vague parse error. Deleting the seam now would mean
+ * rebuilding it for the fourth forge.
  */
 const FACTORIES: Partial<Record<ProviderId, RepoProviderFactory>> = {
   github: (token) => new GitHubProvider(token),
-  gitlab: (token) => new GitLabProvider(token)
+  gitlab: (token) => new GitLabProvider(token),
+  bitbucket: (token) => new BitbucketProvider(token)
 };
 
 export function supportedProviderIds(): ProviderId[] {

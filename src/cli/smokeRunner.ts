@@ -25,16 +25,22 @@ export interface SmokeOptions {
  * One repo per implemented forge, deliberately.
  *
  * A smoke test that only ever exercises GitHub would pass on a deployment
- * where the GitLab path is broken in exactly the ways a smoke test exists
- * to catch: no outbound route to gitlab.com, a GITLAB_TOKEN that expired,
- * a proxy that rewrites the API host. The GitHub repos stay small and
- * stable; the GitLab one is a real, actively developed public project for
- * the same reason.
+ * where another forge's path is broken in exactly the ways a smoke test
+ * exists to catch: no outbound route to that host, a token that expired, a
+ * proxy that rewrites the API host. The GitHub repos stay small and
+ * stable; the GitLab and Bitbucket ones are real, actively developed
+ * public projects for the same reason.
+ *
+ * The Bitbucket entry earns its place twice over, because that path costs
+ * the most to get wrong: its API lives on a different host than its clone
+ * URLs, so a deployment can reach bitbucket.org to clone and still fail
+ * every API call.
  */
 export const DEFAULT_SMOKE_REPOS = [
   "octocat/Hello-World",
   "expressjs/express",
-  "https://gitlab.com/gitlab-org/cli"
+  "https://gitlab.com/gitlab-org/cli",
+  "https://bitbucket.org/atlassian/aui"
 ];
 
 interface Attempt {

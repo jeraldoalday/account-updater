@@ -1,11 +1,15 @@
 import type { RepoRef } from "../types";
 
 /**
- * The forges this service knows how to *name*. Only "github" is actually
- * implemented (see `src/providers/registry.ts`); the other two exist so a
- * caller pasting a GitLab or Bitbucket URL gets a precise "not supported
- * yet" answer instead of a confusing parse failure, and so adding a real
- * implementation later is a registry entry rather than a rewrite.
+ * The forges this service knows how to *name*.
+ *
+ * Naming a forge and evaluating one are separate concerns, and this table
+ * is the first of the two: it is what turns a pasted URL into a known
+ * host, which is where the SSRF guard lives. Which of these can actually
+ * be evaluated is the registry's business (see
+ * `src/providers/registry.ts`) - all three can today, and a forge added
+ * here before its client exists still parses into a precise "not
+ * supported yet" answer rather than a confusing parse failure.
  */
 export type ProviderId = "github" | "gitlab" | "bitbucket";
 

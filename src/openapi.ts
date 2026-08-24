@@ -2,6 +2,29 @@ import { PROVIDER_IDS } from "./providers/hosts";
 import { supportedProviderIds } from "./providers/registry";
 import { version } from "./version";
 
+/**
+ * Which forges a caller can name, and which of those actually get
+ * evaluated.
+ *
+ * Two sentences rather than one template, because the interesting case is
+ * whether there is a gap between the two lists. Reading "implemented for
+ * github, gitlab, bitbucket only" when those are also the only recognized
+ * forges tells a caller nothing and reads like a limitation that isn't
+ * there.
+ */
+export function providerSupportSentence(): string {
+  const supported = supportedProviderIds();
+  const unimplemented = PROVIDER_IDS.filter((id) => !supported.includes(id));
+
+  if (unimplemented.length === 0) {
+    return `Repo references on ${PROVIDER_IDS.join(", ")} are recognized and evaluated.`;
+  }
+  return (
+    `Repo references on ${PROVIDER_IDS.join(", ")} are recognized; ` +
+    `evaluation is currently implemented for ${supported.join(", ")} only.`
+  );
+}
+
 // Hand-written rather than generated from the zod schemas/routes — small
 // enough surface area that keeping this in sync by hand is cheaper than
 // wiring up a generator. Served as-is at GET /openapi.json.
@@ -11,8 +34,7 @@ export const openApiSpec = {
     title: "account-updater",
     description:
       "Checks whether a repo meets the eligibility requirements to connect an account. " +
-      `Repo references on ${PROVIDER_IDS.join(", ")} are recognized; ` +
-      `evaluation is currently implemented for ${supportedProviderIds().join(", ")} only.`,
+      providerSupportSentence(),
     version
   },
   paths: {

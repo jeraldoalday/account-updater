@@ -52,9 +52,23 @@ export class UnsupportedProviderError extends Error {
     readonly providerId: ProviderId,
     readonly supported: readonly ProviderId[]
   ) {
-    const name = PROVIDER_HOSTS[providerId].displayName;
-    const supportedNames = supported.map((id) => PROVIDER_HOSTS[id].displayName).join(", ");
+    const name = displayName(providerId);
+    const supportedNames = supported.map(displayName).join(", ");
     super(`${name} repositories are not supported yet (supported: ${supportedNames})`);
     this.name = "UnsupportedProviderError";
   }
+}
+
+/**
+ * The forge's name, falling back to the raw id for one the host table does
+ * not name.
+ *
+ * Every id reaching this today comes from the table, so the fallback is
+ * unreachable - but this runs while *constructing an error*, and an error
+ * constructor that can itself throw turns a clean 400 into a 502 with a
+ * TypeError in it. The one place worth being forgiving is the path that
+ * reports a failure.
+ */
+function displayName(id: ProviderId): string {
+  return PROVIDER_HOSTS[id]?.displayName ?? id;
 }
