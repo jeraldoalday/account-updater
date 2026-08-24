@@ -95,8 +95,18 @@ contributor diversity, scored leniently because a single-maintainer repo is
 both common and legitimate — that has to clear one score threshold.
 
 Push-event data is a _best-effort_ signal by contract: GitHub only retains
-about 90 days of events, so a provider that has nothing to report must say
-`available: false` and have that treated as neutral, never as a failure.
+about 90 days of events, GitLab needs `read_api` to expose any at all, and
+Bitbucket Cloud has no repository events API whatsoever. A provider with
+nothing to report says `available: false`.
+
+An unavailable signal is then _excluded_ from the blended score and the
+remaining weights are renormalized over the signals that did have data —
+not scored as if it had passed. Awarding a full mark for a signal nobody
+measured hands the repo that signal's whole weight against a fixed
+threshold, which makes an unmeasurable repo easier to pass than a measured
+one. Renormalizing means the verdict rests only on evidence that exists,
+and a forge that exposes less of it neither helps nor hurts the repos
+hosted on it.
 
 ## Extension seams
 
@@ -107,23 +117,42 @@ checks. Implement it and add one entry to the registry in
 `src/providers/registry.ts`; the file-tree half needs nothing, because it's
 a plain `git clone` against a URL built from the provider's host entry.
 
-GitLab was added this way and cost exactly that: a client, a provider
-class, and a registry entry. No check, cache key, audit row, route, or
-clone path changed. The one thing outside the seam that did need work was
-URL parsing — GitLab has nested groups, so "the owner is the first path
-segment" is a GitHub rule rather than a universal one, and the host table
-now carries a `supportsNestedNamespaces` flag that path splitting follows.
+GitLab and Bitbucket were both added this way and cost exactly that: a
+client, a provider class, and a registry entry. No check, cache key, audit
+row, route, or clone path changed for either.
 
-Note the split between _naming_ a forge and _supporting_ one: `hosts.ts`
-knows Bitbucket so its URLs parse into a precise "not supported yet" 400,
-rather than a confusing parse error or a 502 that invites the caller to
-retry something that can never succeed.
+What each one did need outside the seam is the useful part of the record.
+GitLab needed URL parsing: it has nested groups, so "the owner is the first
+path segment" is a GitHub rule rather than a universal one, and the host
+table carries a `supportsNestedNamespaces` flag that path splitting
+follows. Bitbucket needed two things: its API lives on a different host
+than its clone URLs (`api.bitbucket.org` vs `bitbucket.org`), so the host
+table declares both; and it has no events API, which is what exposed the
+scoring bug where an absent signal was silently worth full marks.
+
+Bitbucket is also the evidence that the seam is worth more than a claim.
+GitLab is shaped like GitHub — a commit endpoint with a total, an events
+endpoint. Bitbucket is not: no total anywhere, cursor pagination, no push
+events. The client absorbed all of it and the adapter stayed three lines of
+delegation.
+
+Note the split between _naming_ a forge and _supporting_ one. Every forge
+`hosts.ts` names is implemented today, and the split stays: a forge added
+to the host table before its client exists parses into a precise "not
+supported yet" 400, rather than a confusing parse error or a 502 that
+invites the caller to retry something that can never succeed. `GET
+/providers` reports both lists at runtime, assembled from those same two
+files.
 
 The transport under a provider is its own choice. GitHub uses Octokit;
-GitLab uses `src/net/httpJson.ts`, a fetch wrapper that returns response
-headers alongside the body and raises errors shaped like Octokit's, so
-shared rate-limit handling and retry scheduling (`src/net/`) work for both
-without knowing which forge produced an error.
+GitLab and Bitbucket use `src/net/httpJson.ts`, a fetch wrapper that
+returns response headers alongside the body and raises errors shaped like
+Octokit's, so shared rate-limit handling and retry scheduling (`src/net/`)
+work for all three without knowing which forge produced an error. Each
+provider keeps its own opinion about which failures are transient
+(`src/*/withRetry.ts`), because the same status code means different things
+on different forges — a 403 is rate limiting on GitHub and insufficient
+scope on the other two.
 
 **Adding a cache backend.** Implement `Cache<V>` (`src/cache/cache.ts`) and
 add it to `createCache()`. `ping()` exists so `GET /ready` can report on the

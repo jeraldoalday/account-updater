@@ -44,7 +44,7 @@ fails.
 ## Running
 
 ```bash
-cp .env.example .env   # set GITHUB_TOKEN / GITLAB_TOKEN: higher rate limits, private repos
+cp .env.example .env   # set GITHUB_TOKEN / GITLAB_TOKEN / BITBUCKET_TOKEN: higher rate limits, private repos
 npm install
 npm run dev             # or: npm run build && npm start
 ```
@@ -108,7 +108,7 @@ local development.
 
 `/eligibility/*` is also rate-limited (20 requests per 60-second window by
 default — see `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`), since each
-request clones a repo and calls the GitHub API. Requests over the limit
+request clones a repo and calls the provider's API. Requests over the limit
 get a 429 with a `Retry-After` header. Every response — not just the 429 —
 carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
 `X-RateLimit-Reset` (unix seconds), so a caller can pace itself instead of
@@ -133,6 +133,12 @@ miss, an audit-trail write failure is swallowed — so a degraded instance
 would otherwise look perfectly healthy while paying full clone and API
 cost on every request.
 
+`GET /providers` lists the forges this build recognizes, which of them it
+can evaluate, an example reference for each, and which signals each forge's
+API contributes. It needs no API key and is not rate-limited: it reads two
+in-memory tables, and a client asking what it may send has not sent
+anything yet.
+
 `GET /metrics` returns in-memory counters (request volume by status class,
 eligibility pass/fail counts both in total and split by forge, cache
 hit/miss counts, and per-stage count/avg/max duration for each evaluation
@@ -145,15 +151,15 @@ format, for scraping directly instead of polling the JSON endpoint.
 `POST /eligibility/check`
 
 ```json
-{ "repo": "owner/name", "token": "optional-per-request-github-token" }
+{ "repo": "owner/name", "token": "optional-per-request-provider-token" }
 ```
 
 `repo` also accepts a full URL (`https://github.com/owner/name`) or an SSH
 URL, on any recognized provider (see [Providers](#providers)); bare
 `owner/name` shorthand is assumed to be GitHub. `token` is optional and
-overrides `GITHUB_TOKEN` for that request — useful for evaluating a private
-repo using the connecting user's own OAuth token instead of a shared server
-token.
+overrides the configured credential _for the forge the request names_ —
+useful for evaluating a private repo using the connecting user's own OAuth
+token instead of a shared server token.
 
 Response:
 
@@ -165,7 +171,18 @@ Response:
     "language": { "passed": true, "primaryLanguage": "TypeScript", "reasons": [] },
     "size": { "passed": true, "totalLines": 12000, "totalFiles": 80, "reasons": [] },
     "history": { "passed": true, "commitCount": 210, "historyDays": 45, "...": "..." },
-    "activeDevelopment": { "passed": true, "score": 0.93, "distinctCommitDays": 30, "...": "..." }
+    "activeDevelopment": {
+      "passed": true,
+      "score": 0.93,
+      "signals": {
+        "daySpread": 1,
+        "pushBulk": null,
+        "messageQuality": 0.88,
+        "contributorDiversity": 0.9
+      },
+      "distinctCommitDays": 30,
+      "...": "..."
+    }
   },
   "reasons": []
 }
@@ -173,12 +190,17 @@ Response:
 
 `reasons` (top-level and per-check) lists every requirement that failed, so
 the caller can show the connecting user why they weren't eligible.
+`activeDevelopment.signals` breaks the blended score into the four signals
+behind it, so a near-miss is diagnosable; `null` means the forge could not
+supply that signal, and it was excluded from the score rather than scored.
 
-If GitHub itself rate-limits a request (after the client's built-in retries
-are exhausted), the endpoint returns 503 with a `Retry-After` header and a
-`rateLimit` object (`remaining`, `resetAt`, `retryAfterSeconds`, any of
-which may be absent if GitHub didn't report them) instead of a generic 502,
-so callers can back off intelligently rather than retrying immediately.
+If the provider itself rate-limits a request (after the client's built-in
+retries are exhausted), the endpoint returns 503 with a `Retry-After`
+header and a `rateLimit` object (`remaining`, `resetAt`,
+`retryAfterSeconds`, any of which may be absent if the provider didn't
+report them) instead of a generic 502, so callers can back off
+intelligently rather than retrying immediately. The error names the forge
+that refused, which is not always the one a caller assumes.
 
 GitHub answers 403 for both rate limiting and plain permission failures,
 so the two are told apart by evidence (an exhausted quota, a `Retry-After`,
@@ -190,7 +212,7 @@ caller could wait out.
 `POST /eligibility/check-batch`
 
 ```json
-{ "repos": ["owner/name-1", "owner/name-2"], "token": "optional-per-request-github-token" }
+{ "repos": ["owner/name-1", "owner/name-2"], "token": "optional-per-request-provider-token" }
 ```
 
 Checks up to 20 repos in one request (3 at a time), returning
@@ -245,10 +267,15 @@ assuming GitHub. Two lists matter, and they're deliberately different:
 
 - **Recognized** (`src/providers/hosts.ts`): GitHub, GitLab, Bitbucket. A
   URL on any of these parses into a `{ provider, owner, repo }` reference.
-- **Implemented** (`src/providers/registry.ts`): GitHub and GitLab. A
-  recognized but unimplemented provider (Bitbucket) is rejected with a 400
-  naming it, rather than a parse error or a 502 that invites a pointless
-  retry.
+- **Implemented** (`src/providers/registry.ts`): all three. The two lists
+  agree today, and the seam between them stays: a forge added to the host
+  table before its client exists is rejected with a 400 naming it, rather
+  than with a parse error or a 502 that invites a pointless retry.
+
+`GET /providers` answers both lists at runtime, assembled from those same
+two files, along with an example reference per forge and which signals each
+forge's API can contribute. It needs no API key — a client asking what it
+may send has not sent anything yet.
 
 GitLab projects can live under nested groups, so a GitLab reference's owner
 may itself contain slashes (`acme/platform/widgets` is the project
@@ -257,9 +284,10 @@ work as-is: parsing stops at the `/-/` segment GitLab uses to separate a
 project path from a view of it. GitHub and Bitbucket keep the old rule,
 where anything past the repo name is a page within the repo.
 
-Credentials are per-forge: `GITHUB_TOKEN` (or a GitHub App installation)
-and `GITLAB_TOKEN`. Neither is ever sent to the other forge's API. A
-per-request `token` is used for whichever provider the request names.
+Credentials are per-forge: `GITHUB_TOKEN` (or a GitHub App installation),
+`GITLAB_TOKEN`, and `BITBUCKET_TOKEN`. None is ever sent to another forge's
+API. A per-request `token` is used for whichever provider the request
+names.
 
 Adding a forge means writing a `RepoProvider` — a commit-history summary
 and a push-event summary, the only two things the eligibility checks need
@@ -270,8 +298,16 @@ already provider-scoped, so `acme/widgets` on two forges stays two
 distinct projects throughout.
 
 The push-event method is best-effort by contract: a forge without such an
-API reports `available: false`, and the activity check treats a missing
-signal as neutral rather than disqualifying.
+API reports `available: false`. A signal reported unavailable is left out
+of the active-development score entirely, and the remaining weights are
+renormalized over the signals that did have data — so a repo is judged on
+the evidence that exists, and being hosted somewhere that reports less of
+it is neither an advantage nor a penalty. The per-signal scores are in the
+response, with `null` for one that could not be measured.
+
+Bitbucket is the case that shape was built for: Bitbucket Cloud has no
+repository events API, so those repos are always scored on three signals
+rather than four.
 
 ## Known limitations
 
@@ -283,8 +319,14 @@ signal as neutral rather than disqualifying.
   in non-push activity, so `pushEvents.available` may be `true` with zero
   observed pushes for older or very active repos; the eligibility decision
   never depends on push-event data being present.
-- Bitbucket URLs parse but cannot be evaluated yet — the seam exists,
-  without an implementation behind it.
+- Bitbucket reports no commit total anywhere and paginates commits with an
+  opaque cursor, so its commit count comes from walking pages in sequence
+  rather than from a header. The walk is capped at 500 commits, so a larger
+  repo reports 500 with `truncated: true` — the safe direction, since the
+  count is a minimum requirement and the cap sits far above it.
+- Bitbucket Cloud has no repository events API, so the push-cadence signal
+  is never available there. It is excluded from the score rather than
+  guessed at.
 - GitLab reports a project's exact commit count in a pagination header, but
   omits it for very large result sets. When that happens the count falls
   back to the bounded commit sample, which understates it — deliberately
@@ -292,7 +334,8 @@ signal as neutral rather than disqualifying.
   on a number the service could not verify.
 - GitLab's events API needs `read_api` even for a public project, so a
   token without it makes the push-cadence signal unavailable rather than
-  wrong. As with GitHub, a missing signal is treated as neutral.
+  wrong. As with GitHub, an unavailable signal is excluded from the score
+  rather than scored.
 - The size/line-count check counts raw lines (including blank lines and
   comments) in files under the five eligible languages' extensions, and
   skips any single file over 2 MB — well above hand-written source, so what

@@ -33,6 +33,13 @@ easiest to forget:
   Set `GITHUB_TOKEN`, or a GitHub App installation for a higher shared
   limit.
 
+`doctor` also warns — rather than blocks — on a missing `GITLAB_TOKEN` or
+`BITBUCKET_TOKEN`, and opens with which forges this build can evaluate and
+whether each has a credential. Those two are warnings because a deployment
+can legitimately never see a repo on either forge; if it does see one, the
+failure is the same shape as the GitHub case: throttled requests, and
+private repos invisible.
+
 Warnings are judgement calls rather than mistakes — a per-process cache
 and a relative database path are both reasonable on a single instance —
 so they are printed without failing the run. The same review runs at
@@ -162,11 +169,22 @@ joins to the access log line and any error line from the same request.
 
 ## When something is wrong
 
-**Every check returns 503 with rate-limit details.** The GitHub credential
-has run out of quota. Check which credential is in use: a per-request
-`token` beats `GITHUB_TOKEN`, which beats the App installation. An
-instance with no credential at all is on 60 requests an hour — `doctor`
-calls this out as critical.
+**Every check returns 503 with rate-limit details.** A provider credential
+has run out of quota. The error names which forge — read it before going
+to look at a quota, because with three forges implemented the one that
+refused is not always the one being assumed. Then check which credential
+is in use for that forge: a per-request `token` beats the configured one
+(`GITHUB_TOKEN` / `GITLAB_TOKEN` / `BITBUCKET_TOKEN`), and on GitHub the
+configured token beats the App installation. An instance with no GitHub
+credential at all is on 60 requests an hour — `doctor` calls that one out
+as critical.
+
+**Bitbucket checks fail while cloning works, or the reverse.** Bitbucket
+is the one forge whose API host differs from its clone host: the API is
+`api.bitbucket.org` and clones come from `bitbucket.org`. A network policy
+or proxy that allows one does not necessarily allow the other, and the
+symptom is one half of the check failing on its own. `npm run smoke`
+exercises both halves against a real public Bitbucket repo.
 
 **Every check returns 502 "git clone failed".** The deployment can't
 clone: no `git` binary in the image, no outbound network, or a token
