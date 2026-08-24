@@ -482,6 +482,21 @@ export const openApiSpec = {
             type: "object",
             properties: {
               score: { type: "number", minimum: 0, maximum: 1 },
+              signals: {
+                type: "object",
+                description:
+                  "Each signal's own score, so a verdict is diagnosable rather than a single " +
+                  "blended number. A null means the forge could not supply that signal - it " +
+                  "is then left out of the average and the remaining weights are " +
+                  "renormalized, so a repo is judged only on evidence that exists. " +
+                  "`pushBulk` is always null for Bitbucket, which has no events API.",
+                properties: {
+                  daySpread: { type: "number", minimum: 0, maximum: 1 },
+                  pushBulk: { type: "number", minimum: 0, maximum: 1, nullable: true },
+                  messageQuality: { type: "number", minimum: 0, maximum: 1 },
+                  contributorDiversity: { type: "number", minimum: 0, maximum: 1 }
+                }
+              },
               distinctCommitDays: { type: "integer" },
               maxSingleDayCommitShare: { type: "number", minimum: 0, maximum: 1 },
               authorStats: {

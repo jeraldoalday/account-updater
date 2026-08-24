@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { checkLanguage } from "../src/eligibility/checks/language";
 import { checkSize } from "../src/eligibility/checks/size";
 import { checkHistory } from "../src/eligibility/checks/history";
-import { checkActiveDevelopment } from "../src/eligibility/checks/activity";
+import { SIGNAL_NAMES, checkActiveDevelopment } from "../src/eligibility/checks/activity";
 import type { CommitHistorySummary, PushEventSummary, SourceScanResult } from "../src/types";
 
 function scan(overrides: Partial<SourceScanResult> = {}): SourceScanResult {
@@ -120,6 +120,78 @@ describe("checkActiveDevelopment", () => {
     const result = checkActiveDevelopment(history(), pushEvents());
     expect(result.score).toBeGreaterThan(0.9);
     expect(result.score).toBeLessThanOrEqual(1);
+  });
+
+  it("reports each signal's score, so a verdict is diagnosable", () => {
+    const result = checkActiveDevelopment(history(), pushEvents());
+
+    expect(Object.keys(result.signals).sort()).toEqual([...SIGNAL_NAMES].sort());
+    for (const name of SIGNAL_NAMES) {
+      const value = result.signals[name];
+      expect(value).not.toBeNull();
+      expect(value as number).toBeGreaterThanOrEqual(0);
+      expect(value as number).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("reports an unavailable signal as null rather than as a score", () => {
+    // The difference between "this looked bad" and "this could not be
+    // measured", which a number cannot express.
+    const result = checkActiveDevelopment(history(), pushEvents({ available: false }));
+
+    expect(result.signals.pushBulk).toBeNull();
+    expect(result.signals.daySpread).not.toBeNull();
+  });
+
+  it("leaves an unavailable signal out of the average instead of giving it full marks", () => {
+    // Scoring an absent signal 1.0 hands the repo its entire weight for
+    // free. The same repo must score the same whether or not a forge
+    // happens to expose push data, so a repo scoring below 1 on the other
+    // signals has to score *lower* without push data than it did when the
+    // absent signal was worth full marks.
+    const mediocre = history({
+      distinctCommitDays: 6,
+      maxSingleDayCommitShare: 0.5,
+      authorStats: { sampled: 150, distinctAuthors: 1, maxAuthorShare: 1 },
+      messageStats: { sampled: 150, distinctMessageRatio: 0.5, genericMessageShare: 0.4 }
+    });
+
+    const withoutPushData = checkActiveDevelopment(mediocre, pushEvents({ available: false }));
+    const withPerfectPushData = checkActiveDevelopment(
+      mediocre,
+      pushEvents({ maxSinglePushCommitShare: 0 })
+    );
+
+    expect(withoutPushData.score).toBeLessThan(withPerfectPushData.score);
+  });
+
+  it("scores a repo the same whether a missing signal is missing or merely neutral", () => {
+    // The renormalized average of the remaining signals, by hand:
+    // daySpread and messageQuality and contributorDiversity over their own
+    // weights. Pinned as a number so a future weighting change has to be
+    // deliberate.
+    const perfect = history({
+      distinctCommitDays: 20,
+      maxSingleDayCommitShare: 0.1,
+      authorStats: { sampled: 150, distinctAuthors: 5, maxAuthorShare: 0.3 },
+      messageStats: { sampled: 150, distinctMessageRatio: 1, genericMessageShare: 0 }
+    });
+
+    const result = checkActiveDevelopment(perfect, pushEvents({ available: false }));
+
+    // 1 * 0.4 + 1 * 0.2 + 1 * 0.15, over 0.75.
+    expect(result.score).toBeCloseTo(1, 10);
+    expect(result.passed).toBe(true);
+  });
+
+  it("does not blame a repo for a push signal it never had", () => {
+    const result = checkActiveDevelopment(
+      history({ distinctCommitDays: 2, maxSingleDayCommitShare: 0.95 }),
+      pushEvents({ available: false, maxSinglePushCommitShare: 1 })
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.reasons.some((r) => r.includes("single push event"))).toBe(false);
   });
 
   it("does not fail a single-maintainer repo on contributor diversity alone", () => {

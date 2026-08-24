@@ -1,3 +1,4 @@
+import type { SignalScores } from "./eligibility/checks/activity";
 import type { AllowedLanguage } from "./eligibility/thresholds";
 import type { ProviderId } from "./providers/hosts";
 
@@ -84,6 +85,7 @@ export interface EligibilityResult {
     };
     activeDevelopment: CheckResult & {
       score: number;
+      signals: SignalScores;
       distinctCommitDays: number;
       maxSingleDayCommitShare: number;
       authorStats: AuthorStats;
