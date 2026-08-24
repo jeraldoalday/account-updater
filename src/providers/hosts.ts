@@ -15,6 +15,19 @@ export interface ProviderHostSpec {
   /** Canonical host, used to build clone URLs. */
   host: string;
   /**
+   * Canonical host for the forge's REST API, which is not always the host
+   * repos are cloned from: GitLab serves `/api/v4` from gitlab.com itself,
+   * while Bitbucket puts its API on api.bitbucket.org and GitHub on
+   * api.github.com.
+   *
+   * Kept in the host table rather than as a constant inside each client so
+   * that every outbound host this service can reach is declared in one
+   * place - the same table the SSRF guard is built from. A client that
+   * assembles its own base URL is a client that can be pointed somewhere
+   * else by a future edit without anyone noticing.
+   */
+  apiHost: string;
+  /**
    * Hostnames accepted when parsing a repo URL: the canonical host and its
    * subdomains, nothing else. Anchored at both ends so a lookalike host
    * ("github.com.evil.test", "notgithub.com") can't slip through — this is
@@ -48,6 +61,10 @@ export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
     id: "github",
     displayName: "GitHub",
     host: "github.com",
+    // Only for completeness: the GitHub path goes through Octokit, which
+    // knows its own base URL. Declared so the table is a full account of
+    // where this service talks to.
+    apiHost: "api.github.com",
     hostPattern: /^(?:[a-z0-9-]+\.)*github\.com$/i,
     sshPrefix: "git@github.com:",
     cloneTokenUser: "x-access-token",
@@ -57,6 +74,7 @@ export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
     id: "gitlab",
     displayName: "GitLab",
     host: "gitlab.com",
+    apiHost: "gitlab.com",
     hostPattern: /^(?:[a-z0-9-]+\.)*gitlab\.com$/i,
     sshPrefix: "git@gitlab.com:",
     cloneTokenUser: "oauth2",
@@ -66,6 +84,7 @@ export const PROVIDER_HOSTS: Record<ProviderId, ProviderHostSpec> = {
     id: "bitbucket",
     displayName: "Bitbucket",
     host: "bitbucket.org",
+    apiHost: "api.bitbucket.org",
     hostPattern: /^(?:[a-z0-9-]+\.)*bitbucket\.org$/i,
     sshPrefix: "git@bitbucket.org:",
     cloneTokenUser: "x-token-auth",
@@ -133,6 +152,16 @@ export function authenticatedCloneUrl(ref: RepoRef, token?: string): string {
   if (!token) return url;
   const user = providerHost(ref.provider).cloneTokenUser;
   return url.replace("https://", `https://${user}:${encodeURIComponent(token)}@`);
+}
+
+/**
+ * The origin a provider's REST API is served from. The only base URL a
+ * client should ever build a request on: always https, always a host from
+ * the table above, never anything derived from caller input or from a URL
+ * an API response handed back.
+ */
+export function apiBaseUrl(id: ProviderId): string {
+  return `https://${providerHost(id).apiHost}`;
 }
 
 /** "github.com/octocat/hello-world" — for log lines and error messages. */

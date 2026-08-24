@@ -3,7 +3,7 @@ import { getJson, numericHeader, type JsonResponse } from "../net/httpJson";
 import { withRetry } from "./withRetry";
 import { summarizeCommitSample, type SampledCommit } from "../analysis/commitSample";
 import { historySpanDays, parseCommitDate, sanitizeCommitDate } from "../analysis/commitDates";
-import { providerHost } from "../providers/hosts";
+import { apiBaseUrl } from "../providers/hosts";
 import type { CommitHistorySummary, PushEventSummary, RepoRef } from "../types";
 
 const API_PATH = "/api/v4";
@@ -54,9 +54,8 @@ export class GitLabClient {
   }
 
   private url(ref: RepoRef, path: string, query: Record<string, string>): string {
-    const host = providerHost(ref.provider).host;
     const search = new URLSearchParams(query).toString();
-    return `https://${host}${API_PATH}/projects/${projectId(ref)}${path}?${search}`;
+    return `${apiBaseUrl(ref.provider)}${API_PATH}/projects/${projectId(ref)}${path}?${search}`;
   }
 
   private headers(): Record<string, string> {

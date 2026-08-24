@@ -3,6 +3,7 @@ import {
   DEFAULT_PROVIDER_ID,
   PROVIDER_HOSTS,
   PROVIDER_IDS,
+  apiBaseUrl,
   authenticatedCloneUrl,
   cloneUrlFor,
   describeRef,
@@ -170,5 +171,32 @@ describe("providerDisplayName", () => {
     for (const id of PROVIDER_IDS) {
       expect(providerDisplayName(id)).toMatch(/\S/);
     }
+  });
+});
+
+describe("apiBaseUrl", () => {
+  it("uses the forge's API host, which is not always the host repos clone from", () => {
+    expect(apiBaseUrl("gitlab")).toBe("https://gitlab.com");
+    expect(apiBaseUrl("bitbucket")).toBe("https://api.bitbucket.org");
+    expect(apiBaseUrl("github")).toBe("https://api.github.com");
+  });
+
+  it("is always https on a host the table declares", () => {
+    // The table is what the SSRF guard is built from, so a base URL that
+    // escaped it would be a request this service never meant to make.
+    for (const id of PROVIDER_IDS) {
+      const url = new URL(apiBaseUrl(id));
+      expect(url.protocol).toBe("https:");
+      expect(url.hostname).toBe(PROVIDER_HOSTS[id].apiHost);
+    }
+  });
+
+  it("keeps clone traffic and API traffic on their own hosts", () => {
+    // Bitbucket is the case that forced this apart: cloning from
+    // api.bitbucket.org, or calling the API on bitbucket.org, both fail.
+    expect(cloneUrlFor({ provider: "bitbucket", owner: "acme", repo: "widgets" })).toBe(
+      "https://bitbucket.org/acme/widgets.git"
+    );
+    expect(apiBaseUrl("bitbucket")).not.toContain("//bitbucket.org");
   });
 });
