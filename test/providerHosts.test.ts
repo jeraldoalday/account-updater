@@ -7,6 +7,7 @@ import {
   cloneUrlFor,
   describeRef,
   matchSshPrefix,
+  providerDisplayName,
   providerHost,
   providerIdForHost
 } from "../src/providers/hosts";
@@ -155,5 +156,19 @@ describe("nested namespaces", () => {
     expect(PROVIDER_HOSTS.gitlab.supportsNestedNamespaces).toBe(true);
     expect(PROVIDER_HOSTS.github.supportsNestedNamespaces).toBe(false);
     expect(PROVIDER_HOSTS.bitbucket.supportsNestedNamespaces).toBe(false);
+  });
+});
+
+describe("providerDisplayName", () => {
+  it("gives each provider the name a person would write", () => {
+    expect(providerDisplayName("github")).toBe("GitHub");
+    expect(providerDisplayName("gitlab")).toBe("GitLab");
+    expect(providerDisplayName("bitbucket")).toBe("Bitbucket");
+  });
+
+  it("names every known provider, so an error message can never be blank", () => {
+    for (const id of PROVIDER_IDS) {
+      expect(providerDisplayName(id)).toMatch(/\S/);
+    }
   });
 });

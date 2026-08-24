@@ -122,9 +122,14 @@ export const openApiSpec = {
           },
           "401": { description: "Missing or invalid API key (only when API_KEY is configured)." },
           "429": { description: "Rate limit exceeded." },
-          "502": { description: "Evaluation failed for a reason other than GitHub rate limiting." },
+          "502": {
+            description: "Evaluation failed for a reason other than provider rate limiting."
+          },
           "503": {
-            description: "GitHub itself rate-limited the request after retries were exhausted.",
+            description:
+              "The provider hosting the repo rate-limited the request after retries were " +
+              "exhausted. The error message names which forge, since a caller checking the " +
+              "wrong one's quota sees plenty of budget left.",
             content: {
               "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } }
             }

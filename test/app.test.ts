@@ -153,8 +153,29 @@ describe("app", () => {
     const res = await request(createApp()).post("/eligibility/check").send({ repo: "o/r" });
 
     expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/GitHub API rate limit/);
     expect(res.body.rateLimit.retryAfterSeconds).toBe(42);
     expect(res.headers["retry-after"]).toBe("42");
+  });
+
+  it("names the forge that actually rate-limited the request, not always GitHub", async () => {
+    // A caller told "GitHub API rate limit" about a gitlab.com repo goes
+    // and checks a quota that has nothing to do with why they were
+    // refused.
+    evaluateEligibility.mockRejectedValue(
+      Object.assign(new Error("rate limited"), {
+        status: 429,
+        response: { headers: { "ratelimit-remaining": "0" } }
+      })
+    );
+
+    const res = await request(createApp())
+      .post("/eligibility/check")
+      .send({ repo: "https://gitlab.com/o/r" });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/GitLab API rate limit hit while evaluating gitlab\.com\/o\/r/);
+    expect(res.body.error).not.toMatch(/GitHub/);
   });
 
   it("rejects a malformed JSON body", async () => {

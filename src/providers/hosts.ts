@@ -139,3 +139,13 @@ export function authenticatedCloneUrl(ref: RepoRef, token?: string): string {
 export function describeRef(ref: RepoRef): string {
   return `${providerHost(ref.provider).host}/${ref.owner}/${ref.repo}`;
 }
+
+/**
+ * "GitHub", "GitLab" — the forge's name as a person writes it, for an
+ * error message a caller reads. Distinct from `describeRef`, which names
+ * the repo: a message about a quota is about the forge, not about one
+ * project on it.
+ */
+export function providerDisplayName(id: ProviderId): string {
+  return providerHost(id).displayName;
+}

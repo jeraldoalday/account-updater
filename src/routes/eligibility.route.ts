@@ -4,7 +4,7 @@ import { parseRepoRef } from "../utils/repoUrl";
 import { evaluateEligibility } from "../eligibility/evaluate";
 import { extractRateLimitInfo, type RateLimitInfo } from "../net/rateLimitInfo";
 import { UnsupportedProviderError } from "../providers/provider";
-import { describeRef } from "../providers/hosts";
+import { describeRef, providerDisplayName } from "../providers/hosts";
 import { mapWithConcurrency } from "../utils/concurrency";
 import type { EligibilityResult, RepoRef } from "../types";
 
@@ -60,10 +60,15 @@ async function tryEvaluate(
 
     const rateLimit = extractRateLimitInfo(err);
     if (rateLimit) {
+      // Named from the ref's forge rather than hardcoded. This message was
+      // written when GitHub was the only provider and kept saying "GitHub"
+      // once GitLab refs started being evaluated, which sent a caller to
+      // check the wrong quota - and, if they went looking, to a GitHub
+      // rate-limit page that showed them plenty of budget left.
       return {
         ok: false,
         status: 503,
-        error: `GitHub API rate limit hit while evaluating ${describeRef(ref)}. Try again later.`,
+        error: `${providerDisplayName(ref.provider)} API rate limit hit while evaluating ${describeRef(ref)}. Try again later.`,
         rateLimit
       };
     }
