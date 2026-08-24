@@ -13,6 +13,74 @@ This file started partway through the project's life, so the 1.0.0 entries
 below were reconstructed from the commit history rather than written as the
 work landed. Everything after that release is written as it lands.
 
+## [1.2.0] - 2026-08-24
+
+Bitbucket support, and the scoring bug it uncovered.
+
+The provider seam now has three implementations behind it. The third one is
+the one that tested it: GitLab is shaped like GitHub, and Bitbucket is not
+
+- no commit total anywhere, cursor pagination, and no repository events API
+  at all. None of that reached past its client and adapter.
+
+### Added
+
+- Bitbucket repos are now evaluated rather than refused. A `bitbucket.org`
+  URL or ssh reference is checked the same way a GitHub or GitLab one is,
+  against the same thresholds.
+- `BITBUCKET_TOKEN` - a Bitbucket repository, project, or workspace access
+  token (or an OAuth token), used for API calls and for cloning private
+  repos; `repository:read` covers both. Per-forge like the other two:
+  neither of the others is ever sent to Bitbucket, and this one is never
+  sent to them. Bitbucket's older app passwords are not supported, since
+  this is sent as a bearer token.
+- `GET /providers` - which forges this build recognizes, which it can
+  evaluate, an example reference for each, and which signals each forge's
+  API contributes. Assembled from the same tables the request path uses, so
+  it cannot claim support the service does not have. Unauthenticated and
+  not rate-limited: a client asking what it may send has not sent anything
+  yet.
+- `activeDevelopment.signals` in an eligibility result - the four signals
+  behind the blended score, so a near-miss is diagnosable. A `null` means
+  the forge could not supply that signal.
+- `npm run doctor` warns when `BITBUCKET_TOKEN` is unset, and its provider
+  summary is now keyed by every forge - it previously reported "no
+  credential" for any forge added after it was written, whatever the
+  environment held.
+- `npm run smoke` checks a real public Bitbucket project by default, and
+  opens by asking the instance which forges it evaluates. The Bitbucket
+  path is the most expensive one to get wrong: its API host
+  (`api.bitbucket.org`) differs from its clone host, so a deployment can
+  clone from Bitbucket and still fail every API call.
+
+### Changed
+
+- **A signal the forge could not supply no longer counts as a passing
+  signal.** The active-development score blends four signals, and an
+  unavailable one was scored a full 1.0 - which handed the repo that
+  signal's entire weight for free against a fixed threshold. An absent
+  signal is now excluded and the remaining weights are renormalized over
+  the signals that had data. A repo that only cleared the bar on that free
+  credit is now rejected. This was always wrong on GitHub, whose Events API
+  only remembers recent activity; Bitbucket, which has no events API at
+  all, would have made it permanent for every repo hosted there.
+- A rate-limit refusal (503) now names the forge that actually refused.
+  Every one of them said "GitHub API rate limit hit", including refusals
+  about GitLab projects, which sent callers to check a quota that had
+  plenty of budget left.
+- The OpenAPI description no longer says evaluation is implemented "for
+  github, gitlab, bitbucket only" now that there is no gap for "only" to
+  describe, and the per-request `token` field is documented as overriding
+  the credential for whichever forge the request names, rather than
+  `GITHUB_TOKEN`.
+
+### Fixed
+
+- The not-supported-provider error threw a `TypeError` while being
+  constructed if handed a forge the host table does not name, turning what
+  should be a clean 400 into a 502. Unreachable today, but it is the error
+  path, which is the worst place for one.
+
 ## [1.1.0] - 2026-08-23
 
 GitLab support. The provider seam shipped in 1.0.0 with one implementation
