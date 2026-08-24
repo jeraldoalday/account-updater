@@ -20,6 +20,7 @@ export interface AuditableConfig {
   githubToken?: string;
   githubAppAuthConfig?: unknown;
   gitlabToken?: string;
+  bitbucketToken?: string;
   cacheBackend: "memory" | "redis";
   cacheTtlMs: number;
   historyDbPath: string;
@@ -70,9 +71,9 @@ export function auditConfig(config: AuditableConfig): ConfigFinding[] {
     });
   }
 
-  // Deliberately a warning where the missing GitHub credential is
-  // critical. A deployment can legitimately never see a GitLab repo, in
-  // which case this costs nothing - but if it does see one, the failure is
+  // Deliberately warnings where the missing GitHub credential is critical.
+  // A deployment can legitimately never see a GitLab or Bitbucket repo, in
+  // which case these cost nothing - but if it does see one, the failure is
   // the same shape: throttled requests, and private projects invisible.
   if (!config.gitlabToken) {
     findings.push({
@@ -82,6 +83,17 @@ export function auditConfig(config: AuditableConfig): ConfigFinding[] {
         "GITLAB_TOKEN is not set, so GitLab API calls are unauthenticated (heavily throttled) and private GitLab projects cannot be evaluated at all.",
       remedy:
         "Set GITLAB_TOKEN with read_api scope (plus read_repository to clone private projects), or ignore this if no GitLab repo will ever be checked here."
+    });
+  }
+
+  if (!config.bitbucketToken) {
+    findings.push({
+      severity: "warning",
+      id: "no-bitbucket-credential",
+      message:
+        "BITBUCKET_TOKEN is not set, so Bitbucket API calls are unauthenticated (heavily throttled) and private Bitbucket repos cannot be evaluated at all.",
+      remedy:
+        "Set BITBUCKET_TOKEN to an access token with repository:read, or ignore this if no Bitbucket repo will ever be checked here."
     });
   }
 

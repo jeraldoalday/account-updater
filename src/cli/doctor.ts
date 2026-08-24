@@ -1,6 +1,6 @@
 import { config } from "../config";
 import { auditConfig, formatFindings, hasBlockingFindings } from "../health/configAudit";
-import { PROVIDER_HOSTS, PROVIDER_IDS } from "../providers/hosts";
+import { PROVIDER_HOSTS, PROVIDER_IDS, type ProviderId } from "../providers/hosts";
 import { isProviderSupported } from "../providers/registry";
 import { version } from "../version";
 
@@ -14,9 +14,14 @@ import { version } from "../version";
  * else in the output says which forges are even in play.
  */
 function describeProviders(): string {
-  const credentials: Partial<Record<string, string | undefined>> = {
+  // Keyed by every ProviderId rather than by the ones that happened to
+  // have a credential when this was written: a forge missing from the map
+  // reported "no credential" however the environment was configured, which
+  // is the one thing this output exists not to get wrong.
+  const credentials: Record<ProviderId, string | undefined> = {
     github: config.githubToken ?? (config.githubAppAuthConfig ? "app installation" : undefined),
-    gitlab: config.gitlabToken
+    gitlab: config.gitlabToken,
+    bitbucket: config.bitbucketToken
   };
 
   return PROVIDER_IDS.map((id) => {

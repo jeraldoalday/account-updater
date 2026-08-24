@@ -12,6 +12,7 @@ function productionConfig(overrides: Partial<AuditableConfig> = {}): AuditableCo
     apiKey: "secret",
     githubToken: "ghp_x",
     gitlabToken: "glpat_x",
+    bitbucketToken: "bbat_x",
     cacheBackend: "redis",
     cacheTtlMs: 600_000,
     historyDbPath: "/var/lib/account-updater/history.db",
@@ -61,6 +62,32 @@ describe("auditConfig", () => {
     expect(finding?.severity).toBe("warning");
     expect(finding?.remedy).toContain("read_api");
     expect(hasBlockingFindings(findings)).toBe(false);
+  });
+
+  it("calls out a missing Bitbucket credential as a warning, not a blocker", () => {
+    const findings = auditConfig(productionConfig({ bitbucketToken: undefined }));
+    const finding = findings.find((f) => f.id === "no-bitbucket-credential");
+
+    expect(finding?.severity).toBe("warning");
+    expect(finding?.remedy).toContain("repository:read");
+    expect(hasBlockingFindings(findings)).toBe(false);
+  });
+
+  it("says something about every forge whose credential can be missing", () => {
+    // A forge implemented without a matching finding here means a
+    // deployment that will throttle and fail on it gets no warning at all,
+    // which is the failure this audit exists to prevent.
+    const findings = ids(
+      productionConfig({
+        githubToken: undefined,
+        gitlabToken: undefined,
+        bitbucketToken: undefined
+      })
+    );
+
+    expect(findings).toContain("no-github-credential");
+    expect(findings).toContain("no-gitlab-credential");
+    expect(findings).toContain("no-bitbucket-credential");
   });
 
   it("accepts a GitHub App installation in place of a token", () => {
