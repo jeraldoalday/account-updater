@@ -32,6 +32,9 @@ function fakeService(overrides: Record<string, Response> = {}) {
       checks: { cache: { ok: true }, history: { ok: true } }
     }),
     "/openapi.json": jsonResponse(200, { openapi: "3.0.3", paths: { "/health": {} } }),
+    "/providers": jsonResponse(200, {
+      providers: supportedProviderIds().map((id) => ({ id, supported: true }))
+    }),
     "/eligibility/check": jsonResponse(200, {
       eligible: true,
       repo: { provider: "github", owner: "octocat", repo: "Hello-World" },
@@ -109,6 +112,48 @@ describe("runSmokeTest", () => {
 
     expect(check(report, "readiness").ok).toBe(false);
     expect(check(report, "readiness").detail).toContain("redis is gone");
+  });
+
+  it("reports which forges the deployed instance evaluates", async () => {
+    const { report } = await run();
+
+    const providers = check(report, "providers");
+    expect(providers.ok).toBe(true);
+    for (const id of supportedProviderIds()) {
+      expect(providers.detail).toContain(id);
+    }
+  });
+
+  it("fails when the instance cannot evaluate a forge this run is about to check", async () => {
+    // The deployed build is the authority on what it supports, and this
+    // CLI can be newer than it. Without this, a default repo on a forge the
+    // instance doesn't implement shows up as a mysterious 400 from the
+    // eligibility check rather than as "that instance is older than you
+    // think".
+    const { report } = await run(
+      {
+        "/providers": jsonResponse(200, {
+          providers: [
+            { id: "github", supported: true },
+            { id: "gitlab", supported: false },
+            { id: "bitbucket", supported: false }
+          ]
+        })
+      },
+      ["octocat/Hello-World", "https://gitlab.com/acme/widgets"]
+    );
+
+    const providers = check(report, "providers");
+    expect(providers.ok).toBe(false);
+    expect(providers.detail).toContain("gitlab.com/acme/widgets");
+    // The forge that does work is not a finding.
+    expect(providers.detail).not.toContain("Hello-World");
+  });
+
+  it("fails when the instance lists no forges at all", async () => {
+    const { report } = await run({ "/providers": jsonResponse(200, { providers: [] }) });
+
+    expect(check(report, "providers").ok).toBe(false);
   });
 
   it("fails when an eligibility check errors upstream", async () => {

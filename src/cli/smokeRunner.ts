@@ -1,3 +1,5 @@
+import { parseRepoRef } from "../utils/repoUrl";
+
 export interface SmokeCheck {
   name: string;
   ok: boolean;
@@ -46,6 +48,23 @@ export const DEFAULT_SMOKE_REPOS = [
 interface Attempt {
   status: number;
   body: unknown;
+}
+
+/**
+ * Which forge a smoke-test repo names, or null for one this build cannot
+ * parse.
+ *
+ * Null rather than a throw: the repo list is configurable, and an entry
+ * this CLI cannot read is a finding for the eligibility check below to
+ * report against the real service, not a reason for the providers check to
+ * fail with someone else's error.
+ */
+function providerIdOf(repo: string): string | null {
+  try {
+    return parseRepoRef(repo).provider;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -115,6 +134,35 @@ export async function runSmokeTest(options: SmokeOptions): Promise<SmokeReport> 
       throw new Error(`GET /ready returned ${status}${failed ? ` (${failed})` : ""}`);
     }
     return "dependencies usable";
+  });
+
+  await check("providers", async () => {
+    const { status, body } = await call("/providers");
+    const { providers } = body as {
+      providers?: { id?: string; supported?: boolean }[];
+    };
+    if (status !== 200) throw new Error(`GET /providers returned ${status}`);
+    if (!Array.isArray(providers) || providers.length === 0) {
+      throw new Error("GET /providers listed no forges");
+    }
+
+    // Compared against the repos this run is about to check, because the
+    // deployed build is the authority on what it supports and this CLI may
+    // be newer or older than it. A default repo on a forge the instance
+    // cannot evaluate would otherwise fail below as a mysterious 400.
+    const supported = new Set(
+      providers.filter((provider) => provider.supported).map((provider) => provider.id)
+    );
+    const unsupported = repos
+      .map((repo) => ({ repo, provider: providerIdOf(repo) }))
+      .filter(({ provider }) => provider !== null && !supported.has(provider));
+    if (unsupported.length > 0) {
+      throw new Error(
+        `this instance does not evaluate ${unsupported.map(({ repo }) => repo).join(", ")}`
+      );
+    }
+
+    return `${[...supported].join(", ")} evaluated here`;
   });
 
   await check("spec", async () => {
