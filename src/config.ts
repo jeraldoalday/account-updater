@@ -26,6 +26,11 @@ const configSchema = z
     // none of its own. Unauthenticated GitLab API calls are allowed but
     // heavily throttled, and private projects are invisible without one.
     gitlabToken: z.string().optional(),
+    // Bitbucket repository, project, or workspace access token (or an
+    // OAuth token), used the same way the other two are: as the fallback
+    // credential when a request supplies none of its own. `repository:read`
+    // is the scope the commit-history call needs.
+    bitbucketToken: z.string().optional(),
     // Ceiling on a single outbound provider API call. Deliberately shared
     // rather than per-provider: it exists to stop one hung upstream from
     // holding a request open, and that concern doesn't vary by forge.
@@ -101,6 +106,7 @@ function loadConfig() {
     githubAppPrivateKey: optionalEnv("GITHUB_APP_PRIVATE_KEY"),
     githubAppInstallationId: optionalEnv("GITHUB_APP_INSTALLATION_ID"),
     gitlabToken: optionalEnv("GITLAB_TOKEN"),
+    bitbucketToken: optionalEnv("BITBUCKET_TOKEN"),
     providerRequestTimeoutMs: optionalEnv("PROVIDER_REQUEST_TIMEOUT_MS"),
     apiKey: optionalEnv("API_KEY"),
     cacheTtlMs: optionalEnv("CACHE_TTL_MS"),

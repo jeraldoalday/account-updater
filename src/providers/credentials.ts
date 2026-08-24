@@ -16,6 +16,10 @@ import type { ProviderId } from "./hosts";
  * forge with no configured credential gets undefined, which means
  * unauthenticated - throttled, and unable to see private projects, but
  * never someone else's secret.
+ *
+ * The switch is exhaustive rather than defaulted, so adding a forge to the
+ * host table without deciding what credential it uses is a compile error
+ * instead of a silent fall through to "no credential".
  */
 export function defaultTokenFor(providerId: ProviderId): string | undefined {
   switch (providerId) {
@@ -23,9 +27,7 @@ export function defaultTokenFor(providerId: ProviderId): string | undefined {
       return config.githubToken;
     case "gitlab":
       return config.gitlabToken;
-    default:
-      // Reached only for a forge that parses but has no implementation, in
-      // which case the registry refuses it before a token is ever used.
-      return undefined;
+    case "bitbucket":
+      return config.bitbucketToken;
   }
 }
