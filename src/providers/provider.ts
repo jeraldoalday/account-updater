@@ -35,6 +35,24 @@ export interface RepoProvider {
 }
 
 /**
+ * What a forge's API can tell this service, independent of any one repo.
+ *
+ * Only push cadence varies today: GitHub and GitLab both have an events
+ * API, and Bitbucket Cloud has none, so a Bitbucket repo is scored on
+ * three signals where the others use four. That is a real difference in
+ * how a verdict was reached, and a caller comparing results across forges
+ * deserves to be able to see it rather than infer it.
+ *
+ * `pushEvents` means "the API exists", not "this repo has push data". A
+ * particular repo can still report no signal - a token without the scope,
+ * a project with no recorded activity - which is why PushEventSummary
+ * carries its own `available` flag.
+ */
+export interface ProviderCapabilities {
+  pushEvents: boolean;
+}
+
+/**
  * Builds a provider bound to a specific token. A factory rather than a
  * singleton because the token varies per request: a caller can supply
  * their own token to have a private repo evaluated.

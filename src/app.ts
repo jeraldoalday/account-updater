@@ -1,6 +1,7 @@
 import express from "express";
 import { eligibilityRouter } from "./routes/eligibility.route";
 import { adminRouter } from "./routes/admin.route";
+import { providersRouter } from "./routes/providers.route";
 import { requestId } from "./middleware/requestId";
 import { requestLogger } from "./middleware/requestLogger";
 import { errorHandler } from "./middleware/errorHandler";
@@ -58,6 +59,11 @@ export function createApp() {
       .set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
       .send(toPrometheusText(metrics.snapshot()));
   });
+
+  // Before /eligibility's middleware, and without any of it: a client
+  // asking which forges it may name has not sent a repo yet, so there is
+  // nothing to authenticate or to rate-limit it for.
+  app.use("/providers", providersRouter);
 
   app.get("/openapi.json", (_req, res) => {
     res.status(200).json(openApiSpec);

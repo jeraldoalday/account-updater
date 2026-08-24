@@ -2,7 +2,12 @@ import { BitbucketProvider } from "./bitbucket/bitbucketProvider";
 import { GitHubProvider } from "./github/githubProvider";
 import { GitLabProvider } from "./gitlab/gitlabProvider";
 import { PROVIDER_IDS, type ProviderId } from "./hosts";
-import { UnsupportedProviderError, type RepoProvider, type RepoProviderFactory } from "./provider";
+import {
+  UnsupportedProviderError,
+  type ProviderCapabilities,
+  type RepoProvider,
+  type RepoProviderFactory
+} from "./provider";
 
 /**
  * The forges with a working implementation - now every forge the host
@@ -20,18 +25,48 @@ import { UnsupportedProviderError, type RepoProvider, type RepoProviderFactory }
  * instead of a vague parse error. Deleting the seam now would mean
  * rebuilding it for the fourth forge.
  */
-const FACTORIES: Partial<Record<ProviderId, RepoProviderFactory>> = {
-  github: (token) => new GitHubProvider(token),
-  gitlab: (token) => new GitLabProvider(token),
-  bitbucket: (token) => new BitbucketProvider(token)
+interface Implementation {
+  factory: RepoProviderFactory;
+  /**
+   * Declared here rather than on the provider instances so that answering
+   * "what can this service do with Bitbucket" costs a map lookup instead
+   * of constructing a provider - GitHub's builds an Octokit client.
+   */
+  capabilities: ProviderCapabilities;
+}
+
+const IMPLEMENTATIONS: Partial<Record<ProviderId, Implementation>> = {
+  github: {
+    factory: (token) => new GitHubProvider(token),
+    capabilities: { pushEvents: true }
+  },
+  gitlab: {
+    factory: (token) => new GitLabProvider(token),
+    capabilities: { pushEvents: true }
+  },
+  bitbucket: {
+    factory: (token) => new BitbucketProvider(token),
+    // Bitbucket Cloud has no repository events API at all, so this one is
+    // scored on three signals rather than four. See BitbucketClient.
+    capabilities: { pushEvents: false }
+  }
 };
 
 export function supportedProviderIds(): ProviderId[] {
-  return PROVIDER_IDS.filter((id) => FACTORIES[id] !== undefined);
+  return PROVIDER_IDS.filter((id) => IMPLEMENTATIONS[id] !== undefined);
 }
 
 export function isProviderSupported(id: ProviderId): boolean {
-  return FACTORIES[id] !== undefined;
+  return IMPLEMENTATIONS[id] !== undefined;
+}
+
+/**
+ * What the forge's API can tell this service, or null for one that has no
+ * implementation - the honest answer there is "nothing", not a set of
+ * capabilities that were never exercised.
+ */
+export function providerCapabilities(id: ProviderId): ProviderCapabilities | null {
+  return IMPLEMENTATIONS[id]?.capabilities ?? null;
 }
 
 /**
@@ -40,9 +75,9 @@ export function isProviderSupported(id: ProviderId): boolean {
  * implementation yet.
  */
 export function createProvider(id: ProviderId, token?: string): RepoProvider {
-  const factory = FACTORIES[id];
-  if (!factory) {
+  const implementation = IMPLEMENTATIONS[id];
+  if (!implementation) {
     throw new UnsupportedProviderError(id, supportedProviderIds());
   }
-  return factory(token);
+  return implementation.factory(token);
 }

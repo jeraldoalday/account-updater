@@ -115,6 +115,28 @@
       ]
     },
     {
+      "name": "providers",
+      "item": [
+        {
+          "name": "Which forges this build recognizes and can evaluate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/providers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "providers"
+              ]
+            },
+            "description": "For a client deciding what it may send: the forges this service knows how to name, which of them are actually evaluated, and what a reference to each looks like. Assembled from the same tables the request path uses, so it cannot claim support the service does not have. Says nothing about which credentials are configured - that is an operator's question, answered by `npm run doctor`."
+          }
+        }
+      ]
+    },
+    {
       "name": "eligibility",
       "item": [
         {

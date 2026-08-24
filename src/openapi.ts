@@ -112,6 +112,36 @@ export const openApiSpec = {
         }
       }
     },
+    "/providers": {
+      get: {
+        summary: "Which forges this build recognizes and can evaluate",
+        description:
+          "For a client deciding what it may send: the forges this service knows how to " +
+          "name, which of them are actually evaluated, and what a reference to each looks " +
+          "like. Assembled from the same tables the request path uses, so it cannot claim " +
+          "support the service does not have. Says nothing about which credentials are " +
+          "configured - that is an operator's question, answered by `npm run doctor`.",
+        security: [],
+        responses: {
+          "200": {
+            description: "The recognized forges.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    providers: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/ProviderDescription" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/openapi.json": {
       get: {
         summary: "This spec",
@@ -389,6 +419,40 @@ export const openApiSpec = {
             default: false,
             description: "Recompute every entry instead of answering from cache."
           }
+        }
+      },
+      ProviderDescription: {
+        type: "object",
+        properties: {
+          id: { type: "string", enum: PROVIDER_IDS, example: "bitbucket" },
+          displayName: { type: "string", example: "Bitbucket" },
+          host: {
+            type: "string",
+            description: "Where a repo on this forge is cloned from.",
+            example: "bitbucket.org"
+          },
+          supported: {
+            type: "boolean",
+            description:
+              "Whether a reference to this forge is evaluated. A recognized-but-unsupported " +
+              "forge is answered with 400, not 502."
+          },
+          nestedNamespaces: {
+            type: "boolean",
+            description:
+              'Whether a project can live under nested groups ("group/subgroup/name"). ' +
+              "True only for GitLab."
+          },
+          signals: {
+            type: "object",
+            description:
+              "Which signals this forge's API can contribute to the active-development " +
+              "score. Absent for a forge with no implementation. `pushEvents` is false for " +
+              "Bitbucket, which has no repository events API - those repos are scored on " +
+              "three signals rather than four, and the missing one counts as neutral.",
+            properties: { pushEvents: { type: "boolean" } }
+          },
+          example: { type: "string", example: "https://bitbucket.org/acme/widgets" }
         }
       },
       RepoRef: {
