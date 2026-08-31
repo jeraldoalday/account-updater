@@ -1,6 +1,9 @@
 import { createCache } from "../cache/createCache";
 import { createHistoryStore } from "../history/createHistoryStore";
 import { isDraining } from "../lifecycle/drainState";
+import { breakerSnapshots } from "../providers/breakers";
+import type { CircuitSnapshot } from "../net/circuitBreaker";
+import type { ProviderId } from "../providers/hosts";
 
 export interface DependencyStatus {
   ok: boolean;
@@ -20,6 +23,22 @@ export interface ReadinessReport {
     cache: DependencyStatus;
     history: DependencyStatus;
   };
+  /**
+   * Each forge's circuit breaker, reported but deliberately not counted
+   * towards `ready`.
+   *
+   * A forge being down is not this instance's fault and not something
+   * another instance would do any better - the breakers are per-process,
+   * but the outage they are reacting to is not. Failing readiness would
+   * pull every instance out of rotation over GitHub having a bad
+   * afternoon, taking down checks for the two forges that are fine and
+   * leaving nothing to serve /rules or /providers either.
+   *
+   * So this is here to be read during an incident, not acted on by a load
+   * balancer: it answers "why is this instance refusing GitHub checks"
+   * from the same place an operator already looks.
+   */
+  providerCircuits: Record<ProviderId, CircuitSnapshot>;
 }
 
 /**
@@ -58,5 +77,10 @@ export async function checkReadiness(): Promise<ReadinessReport> {
   const cache = await checkCache();
   const history = checkHistory();
   const draining = isDraining();
-  return { ready: !draining && cache.ok && history.ok, draining, checks: { cache, history } };
+  return {
+    ready: !draining && cache.ok && history.ok,
+    draining,
+    checks: { cache, history },
+    providerCircuits: breakerSnapshots()
+  };
 }

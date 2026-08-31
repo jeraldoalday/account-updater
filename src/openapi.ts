@@ -675,7 +675,41 @@ export const openApiSpec = {
               cache: { $ref: "#/components/schemas/DependencyStatus" },
               history: { $ref: "#/components/schemas/DependencyStatus" }
             }
+          },
+          providerCircuits: {
+            type: "object",
+            description:
+              "Each forge's circuit breaker, keyed by provider id. Reported here but " +
+              "deliberately not counted towards `ready`: a forge being down is not this " +
+              "instance's fault and not something another instance would do better, so " +
+              "failing readiness over it would pull every instance out of rotation and " +
+              "take down checks for the forges that are fine.",
+            additionalProperties: { $ref: "#/components/schemas/CircuitSnapshot" }
           }
+        }
+      },
+      CircuitSnapshot: {
+        type: "object",
+        properties: {
+          name: { type: "string", example: "GitHub" },
+          state: {
+            type: "string",
+            enum: ["closed", "open", "half-open"],
+            description:
+              "closed: calls go through. open: calls are refused without reaching the " +
+              "forge. half-open: the cooldown has elapsed and one call will be let " +
+              "through to see whether the forge is back."
+          },
+          consecutiveFailures: {
+            type: "number",
+            description:
+              "Failures in a row counted against this breaker. Climbs while the circuit " +
+              "is still closed, so a forge starting to wobble is visible before anything " +
+              "is refused."
+          },
+          openedAt: { type: "string", format: "date-time" },
+          retryAfterMs: { type: "number" },
+          lastError: { type: "string", example: "500 from api.github.com" }
         }
       },
       Metrics: {
@@ -715,6 +749,16 @@ export const openApiSpec = {
                 failed: { type: "number" }
               }
             }
+          },
+          providerCircuits: {
+            type: "object",
+            description:
+              "Each forge's circuit breaker, keyed by provider id. Every forge is listed, " +
+              "including the healthy ones, so a closed circuit is an assertion rather " +
+              "than an absence. A breaker opens after a run of failures that look like " +
+              "the forge itself being unavailable, and while it is open checks for repos " +
+              "on that forge are refused with 503 without the forge being called.",
+            additionalProperties: { $ref: "#/components/schemas/CircuitSnapshot" }
           },
           stageDurations: {
             type: "object",

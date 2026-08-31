@@ -18,6 +18,7 @@ vi.mock("../src/history/createHistoryStore", () => ({
 }));
 
 const { checkReadiness } = await import("../src/health/readiness");
+const { breakerSnapshots, resetBreakers } = await import("../src/providers/breakers");
 const { createApp } = await import("../src/app");
 const { beginDraining, resetDrainState } = await import("../src/lifecycle/drainState");
 
@@ -31,7 +32,8 @@ describe("checkReadiness", () => {
     await expect(checkReadiness()).resolves.toEqual({
       ready: true,
       draining: false,
-      checks: { cache: { ok: true }, history: { ok: true } }
+      checks: { cache: { ok: true }, history: { ok: true } },
+      providerCircuits: breakerSnapshots()
     });
   });
 
@@ -94,7 +96,8 @@ describe("GET /ready", () => {
     expect(res.body).toEqual({
       ready: false,
       draining: false,
-      checks: { cache: { ok: false, error: "redis is gone" }, history: { ok: true } }
+      checks: { cache: { ok: false, error: "redis is gone" }, history: { ok: true } },
+      providerCircuits: breakerSnapshots()
     });
   });
 
@@ -136,5 +139,41 @@ describe("readiness while shutting down", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("draining");
+  });
+});
+
+describe("readiness and a forge that has stopped answering", () => {
+  beforeEach(() => {
+    ping.mockReset().mockResolvedValue(undefined);
+    historyPing.mockReset().mockReturnValue(undefined);
+    resetBreakers();
+  });
+
+  afterEach(() => {
+    resetBreakers();
+  });
+
+  it("reports every forge's circuit, so a closed one is an assertion not an absence", async () => {
+    const report = await checkReadiness();
+
+    expect(Object.keys(report.providerCircuits).sort()).toEqual(["bitbucket", "github", "gitlab"]);
+    expect(report.providerCircuits.github.state).toBe("closed");
+  });
+
+  // A forge being down is not this instance's fault, and not something
+  // another instance would do any better. Failing readiness over it would
+  // pull every instance out of rotation because GitHub is having a bad
+  // afternoon - taking down checks for the two forges that are fine, and
+  // leaving nothing to serve /rules or /providers either.
+  it("stays ready while a forge's circuit is open", async () => {
+    const { breakerFor } = await import("../src/providers/breakers");
+    const github = breakerFor("github");
+    const failing = () => Promise.reject(Object.assign(new Error("500"), { status: 500 }));
+    for (let i = 0; i < 10; i++) await github.run(failing).catch(() => undefined);
+
+    const report = await checkReadiness();
+
+    expect(report.providerCircuits.github.state).toBe("open");
+    expect(report.ready).toBe(true);
   });
 });

@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { toPrometheusText } from "../src/metrics/prometheusFormat";
-import type { MetricsSnapshot } from "../src/metrics/metrics";
+import type { ServiceSnapshot } from "../src/metrics/serviceSnapshot";
 
-function emptySnapshot(): MetricsSnapshot {
+function emptySnapshot(): ServiceSnapshot {
   return {
+    providerCircuits: {
+      github: { name: "GitHub", state: "closed", consecutiveFailures: 0 },
+      gitlab: { name: "GitLab", state: "closed", consecutiveFailures: 0 },
+      bitbucket: { name: "Bitbucket", state: "closed", consecutiveFailures: 0 }
+    },
     requestsTotal: 0,
     requestsByStatusClass: {},
     eligibilityChecksTotal: 0,
@@ -117,5 +122,64 @@ describe("per-provider eligibility series", () => {
     const text = toPrometheusText(emptySnapshot());
 
     expect(text).not.toContain("account_updater_eligibility_checks_by_provider_total{");
+  });
+});
+
+describe("toPrometheusText, provider circuit breakers", () => {
+  it("renders every forge's state, including the healthy ones", () => {
+    const text = toPrometheusText(emptySnapshot());
+
+    // A series that only appears when a forge breaks cannot be alerted on
+    // the way one that sits at 0 and jumps can, and its absence is
+    // indistinguishable from a failed scrape.
+    expect(text).toContain('account_updater_provider_circuit_state{provider="github"} 0');
+    expect(text).toContain('account_updater_provider_circuit_state{provider="gitlab"} 0');
+    expect(text).toContain('account_updater_provider_circuit_state{provider="bitbucket"} 0');
+  });
+
+  it("orders the states by how bad they are, so a threshold alert works", () => {
+    const snapshot = emptySnapshot();
+    snapshot.providerCircuits.github = {
+      name: "GitHub",
+      state: "open",
+      consecutiveFailures: 5,
+      openedAt: "2026-08-31T10:00:00.000Z",
+      retryAfterMs: 20_000,
+      lastError: "500 from api.github.com"
+    };
+    snapshot.providerCircuits.gitlab = {
+      name: "GitLab",
+      state: "half-open",
+      consecutiveFailures: 5
+    };
+
+    const text = toPrometheusText(snapshot);
+
+    expect(text).toContain('account_updater_provider_circuit_state{provider="github"} 2');
+    expect(text).toContain('account_updater_provider_circuit_state{provider="gitlab"} 1');
+    expect(text).toContain('account_updater_provider_circuit_state{provider="bitbucket"} 0');
+  });
+
+  // The early warning: this climbs while the circuit is still closed, so a
+  // forge starting to wobble is visible before anything is cut off.
+  it("renders the consecutive failure count behind each circuit", () => {
+    const snapshot = emptySnapshot();
+    snapshot.providerCircuits.bitbucket = {
+      name: "Bitbucket",
+      state: "closed",
+      consecutiveFailures: 3
+    };
+
+    const text = toPrometheusText(snapshot);
+
+    expect(text).toContain('account_updater_provider_consecutive_failures{provider="bitbucket"} 3');
+    expect(text).toContain('account_updater_provider_consecutive_failures{provider="github"} 0');
+  });
+
+  it("declares both circuit series as gauges, not counters", () => {
+    const text = toPrometheusText(emptySnapshot());
+
+    expect(text).toContain("# TYPE account_updater_provider_circuit_state gauge");
+    expect(text).toContain("# TYPE account_updater_provider_consecutive_failures gauge");
   });
 });

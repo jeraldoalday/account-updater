@@ -1,4 +1,5 @@
-import type { MetricsSnapshot } from "./metrics";
+import type { CircuitState } from "../net/circuitBreaker";
+import type { ServiceSnapshot } from "./serviceSnapshot";
 
 function escapeLabelValue(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
@@ -16,11 +17,24 @@ function counter(name: string, help: string, value: number): string[] {
 }
 
 /**
+ * Circuit state as a number, since Prometheus has no string values.
+ *
+ * Ordered by how bad it is, so `max by (provider)` and a threshold alert
+ * both do the obvious thing, and so a graph of it reads top to bottom the
+ * way an incident does.
+ */
+const CIRCUIT_STATE_VALUES: Record<CircuitState, number> = {
+  closed: 0,
+  "half-open": 1,
+  open: 2
+};
+
+/**
  * Renders the same data as GET /metrics (JSON) in Prometheus's text
  * exposition format, for scraping by a Prometheus server instead of (or
  * alongside) a caller that just wants the plain JSON snapshot.
  */
-export function toPrometheusText(snapshot: MetricsSnapshot): string {
+export function toPrometheusText(snapshot: ServiceSnapshot): string {
   const lines: string[] = [
     ...counter(
       "account_updater_requests_total",
@@ -97,6 +111,26 @@ export function toPrometheusText(snapshot: MetricsSnapshot): string {
     "# TYPE account_updater_stage_duration_max_ms gauge",
     ...Object.entries(snapshot.stageDurations).map(([stage, stats]) =>
       metricLine("account_updater_stage_duration_max_ms", stats.maxMs, { stage })
+    ),
+    "# HELP account_updater_provider_circuit_state Provider circuit breaker state (0 closed, 1 half-open, 2 open)",
+    "# TYPE account_updater_provider_circuit_state gauge",
+    // Emitted for every forge, including the healthy ones. A series that
+    // only appears when a forge breaks cannot be alerted on the way a
+    // series that is always 0 and goes to 2 can, and an absent series is
+    // indistinguishable from a scrape that failed.
+    ...Object.entries(snapshot.providerCircuits).map(([provider, circuit]) =>
+      metricLine("account_updater_provider_circuit_state", CIRCUIT_STATE_VALUES[circuit.state], {
+        provider
+      })
+    ),
+    "# HELP account_updater_provider_consecutive_failures Consecutive failures counted against a forge's circuit breaker",
+    "# TYPE account_updater_provider_consecutive_failures gauge",
+    // The early warning: this climbs while the circuit is still closed, so
+    // a forge starting to wobble is visible before it is cut off.
+    ...Object.entries(snapshot.providerCircuits).map(([provider, circuit]) =>
+      metricLine("account_updater_provider_consecutive_failures", circuit.consecutiveFailures, {
+        provider
+      })
     )
   ];
 

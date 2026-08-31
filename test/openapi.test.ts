@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openApiSpec, providerSupportSentence } from "../src/openapi";
-import { metrics } from "../src/metrics/metrics";
+import { serviceSnapshot } from "../src/metrics/serviceSnapshot";
 import { toPrometheusText } from "../src/metrics/prometheusFormat";
 import { PROVIDER_IDS } from "../src/providers/hosts";
 import { supportedProviderIds } from "../src/providers/registry";
@@ -106,14 +106,14 @@ describe("openApiSpec", () => {
     // exported by /metrics and /metrics/prometheus but absent here. Compare
     // both directions so neither a new counter nor a removed one drifts.
     const documented = Object.keys(openApiSpec.components.schemas.Metrics.properties).sort();
-    const actual = Object.keys(metrics.snapshot()).sort();
+    const actual = Object.keys(serviceSnapshot()).sort();
     expect(documented).toEqual(actual);
   });
 
   it("exports every documented counter in the Prometheus rendering too", () => {
     // Same drift, other exporter: a counter can be documented and returned
     // as JSON while the Prometheus text rendering forgets it.
-    const text = toPrometheusText(metrics.snapshot());
+    const text = toPrometheusText(serviceSnapshot());
     const scalarCounters = Object.entries(openApiSpec.components.schemas.Metrics.properties)
       .filter(([, schema]) => (schema as { type?: string }).type === "number")
       .map(([name]) => name);

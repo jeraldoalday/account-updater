@@ -11,7 +11,7 @@ import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import { rateLimit } from "./middleware/rateLimit";
 import { config } from "./config";
 import { version } from "./version";
-import { metrics } from "./metrics/metrics";
+import { serviceSnapshot } from "./metrics/serviceSnapshot";
 import { toPrometheusText } from "./metrics/prometheusFormat";
 import { openApiSpec } from "./openapi";
 import { checkReadiness } from "./health/readiness";
@@ -51,14 +51,14 @@ export function createApp() {
   });
 
   app.get("/metrics", (_req, res) => {
-    res.status(200).json(metrics.snapshot());
+    res.status(200).json(serviceSnapshot());
   });
 
   app.get("/metrics/prometheus", (_req, res) => {
     res
       .status(200)
       .set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-      .send(toPrometheusText(metrics.snapshot()));
+      .send(toPrometheusText(serviceSnapshot()));
   });
 
   // Before /eligibility's middleware, and without any of it: a client
