@@ -28,14 +28,41 @@ export interface EvaluateOptions {
 }
 
 const resultCache = createCache<EligibilityResult>();
+
+/**
+ * An evaluation currently running, so concurrent requests for the same
+ * repo can share it instead of each cloning independently.
+ *
+ * `startedAt` is what makes the entry safe to share. A computation is only
+ * as current as the moment it began reading the repo, and a refresh is a
+ * request for an answer that reflects the repo *now* - so the two have to
+ * be comparable. See evaluateEligibility().
+ */
+interface InFlightEvaluation {
+  startedAt: number;
+  promise: Promise<EligibilityResult>;
+}
+
 // Coalesces concurrent cache-miss requests for the same repo into a single
 // computeEligibility() call. Without this, a burst of requests for a repo
 // that isn't cached yet (e.g. several callers checking the same new repo at
 // once) would each independently clone it and hit the provider API. Scoped to
 // this process only — complementary to, not a replacement for, the shared
 // Redis cache backend.
-const inFlight = new Map<string, Promise<EligibilityResult>>();
+const inFlight = new Map<string, InFlightEvaluation>();
 const historyStore = createHistoryStore();
+
+/**
+ * How much earlier than a refresh request an already-running evaluation
+ * may have started and still be allowed to answer it.
+ *
+ * Small enough that nothing a caller could have pushed in between fits
+ * inside it, and large enough that a burst of refreshes arriving in the
+ * same instant shares one clone instead of racing the clock's resolution.
+ * Well under the time any real clone takes, which is the case this is
+ * protecting against.
+ */
+const REFRESH_JOIN_GRACE_MS = 250;
 
 /**
  * The cache is an optimization, not a dependency: a shared Redis backend
@@ -182,6 +209,10 @@ export async function evaluateEligibility(
   const cacheable = options.cacheable ?? true;
   const refresh = options.refresh ?? false;
   const cacheKey = cacheKeyFor(ref);
+  // Taken before anything is awaited: this is "when the caller asked", and
+  // it is what a running evaluation's start time gets compared against
+  // below.
+  const requestedAt = Date.now();
 
   if (!cacheable) {
     return computeEligibility(ref, token);
@@ -198,23 +229,49 @@ export async function evaluateEligibility(
     metrics.recordCacheMiss();
   }
 
-  // Joined even on a refresh: an in-flight entry is always a computation
-  // that started after this request's own decision to bypass the cache,
-  // so it is as fresh as recomputing would be - and joining it is what
-  // stops a burst of refreshes for one repo from becoming a burst of
-  // clones.
+  // A plain request joins whatever is already running: it would have
+  // accepted a cached result up to CACHE_TTL_MS old, so an evaluation that
+  // started moments ago is strictly fresher than what it asked for.
+  //
+  // A refresh is a different question. It means "the thing you rejected
+  // this repo for is fixed - look again", so it is only answerable by work
+  // that began after the caller said so. An evaluation already running when
+  // the request arrived may have cloned the repo, or read its commit
+  // history, before the fix landed; handing that back tells the caller
+  // their fix didn't work. On a large repo the two calls can be a minute
+  // apart, which is exactly the window a caller who just pushed a fix is
+  // in.
+  //
+  // "After the caller said so" is given a small grace rather than read to
+  // the millisecond, so that refreshes arriving together still coalesce
+  // into one clone. Requests within a fraction of a second of each other
+  // are one burst - a client retrying, or several callers reacting to the
+  // same push - and cannot be on opposite sides of the fix that prompted
+  // them. Work older than that could be, so it is recomputed.
   const existing = inFlight.get(cacheKey);
-  if (existing) {
-    return existing;
+  if (existing && (!refresh || existing.startedAt >= requestedAt - REFRESH_JOIN_GRACE_MS)) {
+    return existing.promise;
   }
 
-  const pending = computeEligibility(ref, token)
+  // Recorded before the work begins, not after, so it is a lower bound on
+  // how current the answer can be. Stamping it afterwards would let a
+  // refresh that arrived while the clone was already underway read as
+  // having arrived first, and join the very work it must not.
+  const startedAt = Date.now();
+  const pending: Promise<EligibilityResult> = computeEligibility(ref, token)
     .then(async (result) => {
       await writeCache(cacheKey, result);
       return result;
     })
-    .finally(() => inFlight.delete(cacheKey));
+    .finally(() => {
+      // Only if this evaluation is still the current one. A refresh that
+      // declined to join replaces the map entry, and an unconditional
+      // delete here would let the older evaluation finishing afterwards
+      // remove the newer one - leaving every request behind it to start
+      // its own clone.
+      if (inFlight.get(cacheKey)?.promise === pending) inFlight.delete(cacheKey);
+    });
 
-  inFlight.set(cacheKey, pending);
+  inFlight.set(cacheKey, { startedAt, promise: pending });
   return pending;
 }
