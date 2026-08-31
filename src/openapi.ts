@@ -142,6 +142,28 @@ export const openApiSpec = {
         }
       }
     },
+    "/rules": {
+      get: {
+        summary: "The thresholds a repo is measured against",
+        description:
+          "The eligibility bar as this build enforces it: the size, history, and " +
+          "active-development thresholds, the signal weights behind the blended " +
+          "active-development score, and which languages count. Served from the same " +
+          "values the checks read, so it cannot drift from what a check will do. The " +
+          "`fingerprint` identifies the rule set - it is what cached verdicts are " +
+          "namespaced by, so two results carrying the same one were decided by the same " +
+          "rules.",
+        security: [],
+        responses: {
+          "200": {
+            description: "The rules in force.",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/RuleSet" } }
+            }
+          }
+        }
+      }
+    },
     "/openapi.json": {
       get: {
         summary: "This spec",
@@ -419,6 +441,57 @@ export const openApiSpec = {
             type: "boolean",
             default: false,
             description: "Recompute every entry instead of answering from cache."
+          }
+        }
+      },
+      RuleSet: {
+        type: "object",
+        properties: {
+          fingerprint: {
+            type: "string",
+            description:
+              "Identifies this rule set. Changes whenever a threshold, a weight, the " +
+              "eligible-language list, or the build changes.",
+            example: "3f1c0a9b2d4e5f60"
+          },
+          version: { type: "string", description: "The build enforcing these rules." },
+          languages: {
+            type: "object",
+            properties: {
+              known: {
+                type: "array",
+                items: { type: "string" },
+                description: "Every language this build can identify."
+              },
+              eligible: {
+                type: "array",
+                items: { type: "string" },
+                description:
+                  "The subset a repo's primary language must be one of, per " +
+                  "ELIGIBLE_LANGUAGES."
+              }
+            }
+          },
+          thresholds: {
+            type: "object",
+            description:
+              "The numeric bar. `activeDevelopmentWeights` are the per-signal weights " +
+              "blended into the active-development score, which must reach " +
+              "`minActiveDevelopmentScore`.",
+            properties: {
+              minLines: { type: "integer" },
+              minFiles: { type: "integer" },
+              minCommits: { type: "integer" },
+              minHistoryDays: { type: "integer" },
+              minDistinctCommitDays: { type: "integer" },
+              maxSingleDayCommitShare: { type: "number" },
+              maxSinglePushEventCommitShare: { type: "number" },
+              minActiveDevelopmentScore: { type: "number" },
+              activeDevelopmentWeights: {
+                type: "object",
+                additionalProperties: { type: "number" }
+              }
+            }
           }
         }
       },

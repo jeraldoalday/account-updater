@@ -137,6 +137,28 @@
       ]
     },
     {
+      "name": "rules",
+      "item": [
+        {
+          "name": "The thresholds a repo is measured against",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules"
+              ]
+            },
+            "description": "The eligibility bar as this build enforces it: the size, history, and active-development thresholds, the signal weights behind the blended active-development score, and which languages count. Served from the same values the checks read, so it cannot drift from what a check will do. The `fingerprint` identifies the rule set - it is what cached verdicts are namespaced by, so two results carrying the same one were decided by the same rules."
+          }
+        }
+      ]
+    },
+    {
       "name": "eligibility",
       "item": [
         {

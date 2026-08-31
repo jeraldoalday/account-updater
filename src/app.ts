@@ -2,6 +2,7 @@ import express from "express";
 import { eligibilityRouter } from "./routes/eligibility.route";
 import { adminRouter } from "./routes/admin.route";
 import { providersRouter } from "./routes/providers.route";
+import { rulesRouter } from "./routes/rules.route";
 import { requestId } from "./middleware/requestId";
 import { requestLogger } from "./middleware/requestLogger";
 import { errorHandler } from "./middleware/errorHandler";
@@ -64,6 +65,10 @@ export function createApp() {
   // asking which forges it may name has not sent a repo yet, so there is
   // nothing to authenticate or to rate-limit it for.
   app.use("/providers", providersRouter);
+
+  // Same treatment, same reason: a caller asking what the bar is has not
+  // submitted a repo yet.
+  app.use("/rules", rulesRouter);
 
   app.get("/openapi.json", (_req, res) => {
     res.status(200).json(openApiSpec);
