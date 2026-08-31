@@ -27,10 +27,28 @@ export interface AuditableConfig {
   historyRetentionDays: number;
   rateLimitMax: number;
   rateLimitWindowMs: number;
+  circuitBreakerFailureThreshold: number;
+  circuitBreakerOpenMs: number;
   shutdownDrainMs: number;
 }
 
 const TEMP_DIRECTORIES = ["/tmp/", "/var/tmp/", "/private/tmp/"];
+
+/**
+ * The largest batch /eligibility/check-batch accepts. Duplicated from the
+ * route rather than imported, because importing it would pull the route -
+ * and with it the evaluation path, the cache, and the SQLite store - into
+ * a module whose whole point is to be checkable without starting any of
+ * that. Asserted equal to the route's own constant by a test.
+ */
+const MAX_BATCH_SIZE = 20;
+
+/**
+ * Long enough that an outage which has already ended goes unnoticed for a
+ * while: the breaker only finds out a forge is back by letting one request
+ * through after the cooldown.
+ */
+const SLOW_RECOVERY_MS = 5 * 60_000;
 
 /**
  * Reviews a running configuration for the settings that are fine on a
@@ -154,6 +172,40 @@ export function auditConfig(config: AuditableConfig): ConfigFinding[] {
       id: "high-rate-limit",
       message: `The rate limit allows ~${Math.round(requestsPerMinute)} eligibility checks per minute per caller, and each one clones a repo and calls the provider API.`,
       remedy: "Lower RATE_LIMIT_MAX or widen RATE_LIMIT_WINDOW_MS unless the host can take it."
+    });
+  }
+
+  // The rate limit is counted in repos, so a limit under the batch cap
+  // isn't a tight limit - it is an endpoint that cannot be used at its
+  // documented size at all.
+  if (config.rateLimitMax < MAX_BATCH_SIZE) {
+    findings.push({
+      severity: "warning",
+      id: "rate-limit-below-batch-size",
+      message: `RATE_LIMIT_MAX is ${config.rateLimitMax}, below the ${MAX_BATCH_SIZE} repos /eligibility/check-batch accepts, so a full-size batch is refused with 429 every time however long the caller waits.`,
+      remedy: `Raise RATE_LIMIT_MAX to at least ${MAX_BATCH_SIZE}, or tell callers to send batches no larger than ${config.rateLimitMax}.`
+    });
+  }
+
+  // One failure is a blip; a whole forge cut off for the cooldown because
+  // of one is a self-inflicted outage.
+  if (config.circuitBreakerFailureThreshold < 3) {
+    findings.push({
+      severity: "warning",
+      id: "trigger-happy-circuit-breaker",
+      message: `CIRCUIT_BREAKER_FAILURE_THRESHOLD is ${config.circuitBreakerFailureThreshold}, so a brief blip stops this instance calling that forge for ${config.circuitBreakerOpenMs}ms.`,
+      remedy:
+        "Raise it to 3 or more. Each counted failure has already survived the retry loop, so the threshold is a count of failures that each took several attempts."
+    });
+  }
+
+  if (config.circuitBreakerOpenMs > SLOW_RECOVERY_MS) {
+    findings.push({
+      severity: "info",
+      id: "slow-circuit-recovery",
+      message: `CIRCUIT_BREAKER_OPEN_MS is ${config.circuitBreakerOpenMs}ms, so a forge that recovers is still refused for up to that long - the breaker only learns it is back by letting a request through after the cooldown.`,
+      remedy:
+        "Shorten it unless you would rather shed load than retry, which is a reasonable choice for a forge that fails slowly."
     });
   }
 

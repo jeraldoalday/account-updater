@@ -15,7 +15,7 @@ const REPO_REQUIRED_MESSAGE =
 // Each repo in a batch clones the repo and hits a provider API, so both
 // caps exist to keep a single request from being able to trigger unbounded
 // work.
-const MAX_BATCH_SIZE = 20;
+export const MAX_BATCH_SIZE = 20;
 const BATCH_CONCURRENCY = 3;
 
 const requestSchema = z.object({

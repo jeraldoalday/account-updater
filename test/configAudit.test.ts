@@ -19,6 +19,8 @@ function productionConfig(overrides: Partial<AuditableConfig> = {}): AuditableCo
     historyRetentionDays: 90,
     rateLimitMax: 20,
     rateLimitWindowMs: 60_000,
+    circuitBreakerFailureThreshold: 5,
+    circuitBreakerOpenMs: 30_000,
     shutdownDrainMs: 5_000,
     ...overrides
   };
@@ -194,5 +196,64 @@ describe("formatFindings", () => {
 
     expect(text).toContain("something is off");
     expect(text).toContain("do this");
+  });
+});
+
+describe("auditConfig and the settings that changed meaning", () => {
+  // The rate limit is counted in repos, so a limit under the batch cap is
+  // not a tight limit - it is an endpoint that cannot be used at its
+  // documented size at all, however long the caller waits.
+  it("warns when the rate limit is below the size of a batch it accepts", () => {
+    const findings = auditConfig(productionConfig({ rateLimitMax: 10 }));
+    const finding = findings.find((f) => f.id === "rate-limit-below-batch-size");
+
+    expect(finding?.severity).toBe("warning");
+    expect(finding?.message).toContain("20 repos");
+  });
+
+  it("says nothing when the limit can cover a full batch", () => {
+    expect(ids(productionConfig({ rateLimitMax: 20 }))).not.toContain(
+      "rate-limit-below-batch-size"
+    );
+  });
+
+  it("keeps the batch cap it warns about in step with the route's own", async () => {
+    // Duplicated rather than imported, to keep this module checkable
+    // without pulling in the evaluation path. Asserted equal here so the
+    // duplication cannot drift into a warning about the wrong number.
+    const { MAX_BATCH_SIZE } = await import("../src/routes/eligibility.route");
+    const finding = auditConfig(productionConfig({ rateLimitMax: 1 })).find(
+      (f) => f.id === "rate-limit-below-batch-size"
+    );
+
+    expect(finding?.message).toContain(`${MAX_BATCH_SIZE} repos`);
+  });
+
+  it("warns when one blip is enough to cut a forge off", () => {
+    const finding = auditConfig(productionConfig({ circuitBreakerFailureThreshold: 1 })).find(
+      (f) => f.id === "trigger-happy-circuit-breaker"
+    );
+
+    expect(finding?.severity).toBe("warning");
+  });
+
+  it("accepts a threshold that needs a real run of failures", () => {
+    expect(ids(productionConfig({ circuitBreakerFailureThreshold: 3 }))).not.toContain(
+      "trigger-happy-circuit-breaker"
+    );
+  });
+
+  it("notes a cooldown long enough to outlast the outage it reacted to", () => {
+    const finding = auditConfig(productionConfig({ circuitBreakerOpenMs: 600_000 })).find(
+      (f) => f.id === "slow-circuit-recovery"
+    );
+
+    expect(finding?.severity).toBe("info");
+  });
+
+  it("says nothing about a cooldown measured in seconds", () => {
+    expect(ids(productionConfig({ circuitBreakerOpenMs: 30_000 }))).not.toContain(
+      "slow-circuit-recovery"
+    );
   });
 });
