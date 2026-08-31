@@ -292,6 +292,61 @@
           }
         },
         {
+          "name": "Where a repo's verdict actually flipped",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/evaluations/changes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "evaluations",
+                "changes"
+              ],
+              "query": [
+                {
+                  "key": "repo",
+                  "value": "",
+                  "description": "Restrict to one repo (\"owner/name\" or a URL on any known forge).",
+                  "disabled": true
+                },
+                {
+                  "key": "direction",
+                  "value": "became-eligible",
+                  "description": "Restrict to changes in one direction.",
+                  "disabled": true
+                },
+                {
+                  "key": "since",
+                  "value": "<date-time>",
+                  "description": "Inclusive lower bound on when the change happened (ISO-8601).",
+                  "disabled": true
+                },
+                {
+                  "key": "until",
+                  "value": "<date-time>",
+                  "description": "Inclusive upper bound on when the change happened (ISO-8601).",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The evaluations at which a repo's answer changed, newest first, and in which direction. /admin/evaluations answers what happened and /admin/evaluations/summary answers how often; this answers which repos changed their mind - the question asked after a threshold is retuned, or when a caller reports that a repo which used to pass has started failing.\n\nA repo's first evaluation inside the window is never reported as a change, since there is nothing before it to differ from. Narrowing `since` therefore hides changes whose earlier verdict fell outside the window."
+          }
+        },
+        {
           "name": "Aggregate view of the evaluation audit trail",
           "request": {
             "method": "GET",

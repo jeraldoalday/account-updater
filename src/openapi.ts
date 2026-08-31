@@ -331,6 +331,75 @@ export const openApiSpec = {
         }
       }
     },
+    "/admin/evaluations/changes": {
+      get: {
+        summary: "Where a repo's verdict actually flipped",
+        description:
+          "The evaluations at which a repo's answer changed, newest first, and in which " +
+          "direction. /admin/evaluations answers what happened and " +
+          "/admin/evaluations/summary answers how often; this answers which repos " +
+          "changed their mind - the question asked after a threshold is retuned, or when " +
+          "a caller reports that a repo which used to pass has started failing.\n\n" +
+          "A repo's first evaluation inside the window is never reported as a change, " +
+          "since there is nothing before it to differ from. Narrowing `since` therefore " +
+          "hides changes whose earlier verdict fell outside the window.",
+        parameters: [
+          {
+            name: "repo",
+            in: "query",
+            schema: { type: "string" },
+            description: 'Restrict to one repo ("owner/name" or a URL on any known forge).'
+          },
+          {
+            name: "direction",
+            in: "query",
+            schema: { type: "string", enum: ["became-eligible", "became-ineligible"] },
+            description: "Restrict to changes in one direction."
+          },
+          {
+            name: "since",
+            in: "query",
+            schema: { type: "string", format: "date-time" },
+            description: "Inclusive lower bound on when the change happened (ISO-8601)."
+          },
+          {
+            name: "until",
+            in: "query",
+            schema: { type: "string", format: "date-time" },
+            description: "Inclusive upper bound on when the change happened (ISO-8601)."
+          },
+          {
+            name: "limit",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 200, default: 50 }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "The verdict changes in the window, newest first.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    changes: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/VerdictChange" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            description: "An unparseable repo, direction, timestamp, or limit.",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } }
+            }
+          }
+        }
+      }
+    },
     "/admin/evaluations/summary": {
       get: {
         summary: "Aggregate view of the evaluation audit trail",
@@ -710,6 +779,32 @@ export const openApiSpec = {
           openedAt: { type: "string", format: "date-time" },
           retryAfterMs: { type: "number" },
           lastError: { type: "string", example: "500 from api.github.com" }
+        }
+      },
+      VerdictChange: {
+        type: "object",
+        properties: {
+          repo: { $ref: "#/components/schemas/RepoRef" },
+          direction: {
+            type: "string",
+            enum: ["became-eligible", "became-ineligible"]
+          },
+          changedAt: {
+            type: "string",
+            format: "date-time",
+            description: "When the evaluation that changed the verdict ran."
+          },
+          previousEvaluatedAt: {
+            type: "string",
+            format: "date-time",
+            description: "When the evaluation before it ran, so the old state can be dated."
+          },
+          reasons: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "The reasons the new verdict came with. Empty for a repo that became " + "eligible."
+          }
         }
       },
       Metrics: {

@@ -44,6 +44,38 @@ export interface EvaluationSummary {
   topFailureReasons: FailureReasonCount[];
 }
 
+export type VerdictDirection = "became-eligible" | "became-ineligible";
+
+export interface VerdictChangeQuery {
+  ref?: RepoRef;
+  since?: string;
+  until?: string;
+  /** Restrict to changes in one direction. */
+  direction?: VerdictDirection;
+  limit?: number;
+}
+
+export interface VerdictChange {
+  repo: RepoRef;
+  direction: VerdictDirection;
+  /** When the evaluation that changed the verdict ran. */
+  changedAt: string;
+  /** When the evaluation before it ran, so the old state can be dated. */
+  previousEvaluatedAt: string;
+  /** The reasons the new verdict came with. Empty for one that passed. */
+  reasons: string[];
+}
+
+interface VerdictChangeRow {
+  provider: string;
+  owner: string;
+  repo: string;
+  evaluated_at: string;
+  previous_evaluated_at: string;
+  eligible: number;
+  reasons: string;
+}
+
 export interface EvaluationRecord {
   id: number;
   repo: RepoRef;
@@ -207,6 +239,71 @@ export class HistoryStore {
       reasonsSampled: reasonLists.length,
       topFailureReasons: topFailureReasons(reasonLists, query.topN ?? DEFAULT_TOP_N)
     };
+  }
+
+  /**
+   * Where a repo's verdict actually flipped, newest first.
+   *
+   * The row list answers "what happened", and the summary answers "how
+   * often" - but the question that gets asked during an incident, or when
+   * a threshold has just been retuned, is neither: which repos changed
+   * their mind, and which way. Answering that from list() means pulling
+   * every row for every repo and diffing them by hand, which is both the
+   * slow way and the way that gets it wrong on a repo checked fifty times.
+   *
+   * A repo's first evaluation inside the window is never a change: there
+   * is nothing before it to differ from. That makes the answer depend on
+   * `since` in a way worth knowing about - narrowing the window hides
+   * changes whose "before" fell outside it - but the alternative, reaching
+   * outside the window for a predecessor, would report a change as having
+   * happened at a time the caller explicitly excluded.
+   */
+  verdictChanges(query: VerdictChangeQuery = {}): VerdictChange[] {
+    const { where, params } = this.buildFilter(query);
+
+    // LAG over each repo's own evaluations in time order: the comparison
+    // has to be against that repo's previous verdict, not the previous
+    // row overall, and doing it in SQL keeps the whole window from being
+    // read into memory to find the handful of rows that changed.
+    const directionClause =
+      query.direction === undefined
+        ? ""
+        : query.direction === "became-eligible"
+          ? "AND eligible = 1"
+          : "AND eligible = 0";
+
+    const rows = this.db
+      .prepare(
+        `SELECT provider, owner, repo, evaluated_at, previous_evaluated_at, eligible, reasons
+         FROM (
+           SELECT provider, owner, repo, evaluated_at, eligible, reasons, id,
+                  LAG(eligible) OVER repo_history AS previous_eligible,
+                  LAG(evaluated_at) OVER repo_history AS previous_evaluated_at
+           FROM evaluations
+           ${where}
+           WINDOW repo_history AS (
+             PARTITION BY provider, owner, repo ORDER BY evaluated_at, id
+           )
+         )
+         WHERE previous_eligible IS NOT NULL
+           AND previous_eligible != eligible
+           ${directionClause}
+         ORDER BY evaluated_at DESC, id DESC
+         LIMIT ?`
+      )
+      .all(...params, query.limit ?? DEFAULT_LIMIT) as VerdictChangeRow[];
+
+    return rows.map((row) => ({
+      repo: {
+        provider: (row.provider ?? DEFAULT_PROVIDER_ID) as ProviderId,
+        owner: row.owner,
+        repo: row.repo
+      },
+      direction: row.eligible === 1 ? "became-eligible" : "became-ineligible",
+      changedAt: row.evaluated_at,
+      previousEvaluatedAt: row.previous_evaluated_at,
+      reasons: JSON.parse(row.reasons) as string[]
+    }));
   }
 
   /**

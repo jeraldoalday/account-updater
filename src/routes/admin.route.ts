@@ -23,6 +23,10 @@ const querySchema = z.object({
   limit: z.coerce.number().int().positive().max(MAX_LIMIT).optional()
 });
 
+const changesQuerySchema = querySchema
+  .omit({ eligible: true })
+  .extend({ direction: z.enum(["became-eligible", "became-ineligible"]).optional() });
+
 const summaryQuerySchema = querySchema
   .omit({ eligible: true, limit: true })
   .extend({ topReasons: z.coerce.number().int().positive().max(MAX_TOP_REASONS).optional() });
@@ -100,4 +104,36 @@ adminRouter.get("/evaluations/summary", (req, res) => {
   });
 
   res.status(200).json(summary);
+});
+
+// The row list answers "what happened to this repo" and the summary
+// answers "how often" - but the question actually asked after a threshold
+// is retuned, or when a partner reports their repo started failing, is
+// neither: which repos changed their mind, and which way. Answering it
+// from /evaluations means pulling every row for every repo and diffing
+// them by hand.
+adminRouter.get("/evaluations/changes", (req, res) => {
+  const parsed = changesQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join("; ") });
+    return;
+  }
+
+  const { repo, since, until, direction } = parsed.data;
+
+  const { ref, error } = parseRepoFilter(repo);
+  if (error) {
+    res.status(400).json({ error });
+    return;
+  }
+
+  const changes = createHistoryStore().verdictChanges({
+    ...(ref ? { ref } : {}),
+    ...(since !== undefined ? { since } : {}),
+    ...(until !== undefined ? { until } : {}),
+    ...(direction !== undefined ? { direction } : {}),
+    limit: parsed.data.limit ?? DEFAULT_LIMIT
+  });
+
+  res.status(200).json({ changes });
 });
