@@ -20,6 +20,17 @@ export interface RateLimitOptions {
   // grows forever as new IPs show up. Configurable mainly so tests don't
   // need thousands of requests to exercise it.
   sweepEveryNRequests?: number;
+  /**
+   * How much budget a request spends, defaulting to one unit each.
+   *
+   * A limit is only worth what it bounds, and what needs bounding here is
+   * the work a caller can cause - clones and provider API calls - not the
+   * number of HTTP requests they send. Those are the same thing only while
+   * every request costs the same, which stopped being true when a batch
+   * endpoint arrived. Supplied by the caller of this middleware because
+   * only the route knows what its own request bodies cost.
+   */
+  cost?: (req: Request) => number;
 }
 
 const DEFAULT_SWEEP_EVERY_N_REQUESTS = 1000;
@@ -48,6 +59,21 @@ function keyFor(req: Request, trustedApiKey: string | undefined): string {
   const provided = req.header("x-api-key");
   if (trustedApiKey && provided === trustedApiKey) return `key:${provided}`;
   return `ip:${req.ip ?? "unknown"}`;
+}
+
+/**
+ * What a request spends, normalized: at least one unit, whole numbers
+ * only, and never NaN.
+ *
+ * The cost function reads a request body the caller controls, so it can
+ * be handed something that isn't a number at all. A NaN cost would make
+ * every subsequent comparison against the window false and silently
+ * disable the limiter for that key - the exact failure the limiter exists
+ * to prevent, reachable by sending a malformed body.
+ */
+function costOf(req: Request, cost: RateLimitOptions["cost"]): number {
+  const raw = cost?.(req) ?? 1;
+  return Number.isFinite(raw) ? Math.max(1, Math.floor(raw)) : 1;
 }
 
 /**
@@ -83,7 +109,7 @@ export function rateLimit(options: RateLimitOptions): RequestHandler {
       windows.set(key, window);
     }
 
-    window.count++;
+    window.count += costOf(req, options.cost);
 
     // On every response, not just the 429: a caller can only pace itself
     // if it can see how much budget is left *before* it runs out. Learning

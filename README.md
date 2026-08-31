@@ -106,9 +106,13 @@ If `API_KEY` is set, every `/eligibility/*` request must include a matching
 `x-api-key` header, or it's rejected with 401. Leave `API_KEY` unset for
 local development.
 
-`/eligibility/*` is also rate-limited (20 requests per 60-second window by
+`/eligibility/*` is also rate-limited (20 repos per 60-second window by
 default — see `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`), since each
-request clones a repo and calls the provider's API. Requests over the limit
+repo checked clones a repo and calls the provider's API. The budget is
+counted in repos rather than requests: a single check spends one unit, and
+a batch spends one per repo it lists. That endpoint exists so a caller
+holding a list doesn't have to make twenty round trips, not so it can cause
+twenty times the work on the same allowance. Requests over the limit
 get a 429 with a `Retry-After` header. Every response — not just the 429 —
 carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
 `X-RateLimit-Reset` (unix seconds), so a caller can pace itself instead of

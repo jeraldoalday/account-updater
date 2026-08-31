@@ -1,5 +1,5 @@
 import express from "express";
-import { eligibilityRouter } from "./routes/eligibility.route";
+import { eligibilityRouter, eligibilityRequestCost } from "./routes/eligibility.route";
 import { adminRouter } from "./routes/admin.route";
 import { providersRouter } from "./routes/providers.route";
 import { rulesRouter } from "./routes/rules.route";
@@ -79,7 +79,11 @@ export function createApp() {
     rateLimit({
       windowMs: config.rateLimitWindowMs,
       max: config.rateLimitMax,
-      trustedApiKey: config.apiKey
+      trustedApiKey: config.apiKey,
+      // Priced per repo, not per request: a batch does up to twenty times
+      // the work of a single check, and charging both one unit made the
+      // configured limit mean twenty times less than it says.
+      cost: eligibilityRequestCost
     }),
     apiKeyAuth(config.apiKey),
     eligibilityRouter

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { parseRepoRef } from "../utils/repoUrl";
 import { evaluateEligibility } from "../eligibility/evaluate";
@@ -38,6 +38,31 @@ const batchRequestSchema = z.object({
   token: z.string().optional(),
   refresh: z.boolean().optional()
 });
+
+/**
+ * What one request to this router costs against the rate limit.
+ *
+ * A single check clones one repo and calls one provider API. A batch does
+ * that up to MAX_BATCH_SIZE times, and charging it a single unit made the
+ * limit mean twenty times less than it says: with the default budget of 20
+ * requests per minute, a caller sending batches instead of single checks
+ * gets 400 clones a minute out of the same allowance. The endpoint was
+ * added as a convenience for callers with a list of repos, not as a way
+ * around the ceiling.
+ *
+ * Charged on the repos asked for rather than the ones that turn out to be
+ * valid: this runs before the body is validated, and the safe direction
+ * for a limiter is to bill for what was requested. Clamped at
+ * MAX_BATCH_SIZE, which is the most work a request can actually cause -
+ * an over-long list is refused by the schema, and billing a caller for a
+ * thousand repos over a typo would cost them the rest of the window for a
+ * request that did nothing.
+ */
+export function eligibilityRequestCost(req: Request): number {
+  const repos = (req.body as { repos?: unknown } | undefined)?.repos;
+  if (!Array.isArray(repos)) return 1;
+  return Math.min(repos.length, MAX_BATCH_SIZE);
+}
 
 type EligibilityOutcome =
   | { ok: true; result: EligibilityResult }

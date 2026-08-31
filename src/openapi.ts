@@ -214,6 +214,11 @@ export const openApiSpec = {
     "/eligibility/check-batch": {
       post: {
         summary: "Evaluate up to 20 repos in one request",
+        description:
+          "A convenience for callers holding a list, not a way around the rate limit: " +
+          "the request spends one unit of the /eligibility budget per repo listed, " +
+          "because each one is cloned and checked against the provider API " +
+          "individually.",
         requestBody: {
           required: true,
           content: {
@@ -392,7 +397,9 @@ export const openApiSpec = {
           "Required on /eligibility/* and /admin/* only when the server has API_KEY " +
           "configured. Both are rate-limited either way, each with its own budget, and " +
           "every response carries X-RateLimit-Limit, X-RateLimit-Remaining, and " +
-          "X-RateLimit-Reset (unix seconds) so a caller can pace itself before it is refused."
+          "X-RateLimit-Reset (unix seconds) so a caller can pace itself before it is refused. " +
+          "The /eligibility budget is counted in repos, not requests: a batch spends one " +
+          "unit per repo it lists, since each one is its own clone and provider API call."
       }
     },
     schemas: {

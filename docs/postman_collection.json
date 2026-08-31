@@ -220,6 +220,7 @@
                 "check-batch"
               ]
             },
+            "description": "A convenience for callers holding a list, not a way around the rate limit: the request spends one unit of the /eligibility budget per repo listed, because each one is cloned and checked against the provider API individually.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"repos\": [\n    \"octocat/Hello-World\",\n    \"rust-lang/rust\"\n  ]\n}",
