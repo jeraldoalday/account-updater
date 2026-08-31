@@ -165,6 +165,30 @@ export async function runSmokeTest(options: SmokeOptions): Promise<SmokeReport> 
     return `${[...supported].join(", ")} evaluated here`;
   });
 
+  // Reported rather than asserted, for the same reason a verdict is:
+  // which thresholds are right is a deployment's decision, not this CLI's.
+  // What it is worth saying out loud is *which* rule set is in force. A
+  // narrowed ELIGIBLE_LANGUAGES or a retuned threshold is invisible in
+  // every other line of this output, and "the repo that used to pass
+  // doesn't" has exactly two explanations - the repo changed, or the bar
+  // did. The fingerprint is what tells them apart, and it is the same
+  // token cached verdicts are namespaced by.
+  await check("rules", async () => {
+    const { status, body } = await call("/rules");
+    const rules = body as {
+      fingerprint?: string;
+      languages?: { eligible?: string[] };
+      thresholds?: Record<string, unknown>;
+    };
+    if (status !== 200) throw new Error(`GET /rules returned ${status}`);
+    if (!rules.fingerprint) throw new Error("GET /rules returned no rule-set fingerprint");
+    if (!rules.thresholds || Object.keys(rules.thresholds).length === 0) {
+      throw new Error("GET /rules returned no thresholds");
+    }
+    const languages = rules.languages?.eligible ?? [];
+    return `ruleset ${rules.fingerprint}, ${languages.length} eligible language(s): ${languages.join(", ")}`;
+  });
+
   await check("spec", async () => {
     const { status, body } = await call("/openapi.json");
     const spec = body as { openapi?: string; paths?: Record<string, unknown> };
@@ -195,6 +219,36 @@ export async function runSmokeTest(options: SmokeOptions): Promise<SmokeReport> 
     });
     if (status !== 400) throw new Error(`expected 400 for an unparseable repo, got ${status}`);
     return "400 as expected";
+  });
+
+  // Deliberately after the evaluations above rather than alongside the
+  // readiness check at the top: a breaker opens because calls failed, so
+  // asking before any call has been made can only ever report "closed".
+  // Asking afterwards is what turns a failed eligibility check on one
+  // forge from a mysterious 503 into "this instance has given up on
+  // Bitbucket, and here is the error that did it".
+  await check("provider circuits", async () => {
+    const { status, body } = await call("/ready");
+    const report = body as {
+      providerCircuits?: Record<string, { state?: string; lastError?: string }>;
+    };
+    if (status !== 200) throw new Error(`GET /ready returned ${status}`);
+
+    const circuits = report.providerCircuits;
+    // An older build has no breakers to report, and a smoke test whose job
+    // is checking a deployment should not fail it for being the deployment
+    // it is.
+    if (!circuits) return "not reported by this build";
+
+    const notClosed = Object.entries(circuits).filter(([, c]) => c.state !== "closed");
+    if (notClosed.length > 0) {
+      throw new Error(
+        notClosed
+          .map(([id, c]) => `${id} circuit is ${c.state}${c.lastError ? `: ${c.lastError}` : ""}`)
+          .join("; ")
+      );
+    }
+    return `${Object.keys(circuits).length} forge(s) answering`;
   });
 
   await check("audit trail", async () => {

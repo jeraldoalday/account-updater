@@ -29,7 +29,18 @@ function fakeService(overrides: Record<string, Response> = {}) {
     "/ready": jsonResponse(200, {
       ready: true,
       draining: false,
-      checks: { cache: { ok: true }, history: { ok: true } }
+      checks: { cache: { ok: true }, history: { ok: true } },
+      providerCircuits: {
+        github: { name: "GitHub", state: "closed", consecutiveFailures: 0 },
+        gitlab: { name: "GitLab", state: "closed", consecutiveFailures: 0 },
+        bitbucket: { name: "Bitbucket", state: "closed", consecutiveFailures: 0 }
+      }
+    }),
+    "/rules": jsonResponse(200, {
+      fingerprint: "3f1c0a9b2d4e5f60",
+      version: "1.3.0",
+      languages: { known: ["TypeScript", "Go"], eligible: ["TypeScript"] },
+      thresholds: { minLines: 8000, minCommits: 140 }
     }),
     "/openapi.json": jsonResponse(200, { openapi: "3.0.3", paths: { "/health": {} } }),
     "/providers": jsonResponse(200, {
@@ -315,5 +326,108 @@ describe("smoke CLI wiring", () => {
       scripts: Record<string, string>;
     };
     expect(pkg.scripts.smoke).toContain("smoke.js");
+  });
+});
+
+describe("runSmokeTest against the rule set a deployment is enforcing", () => {
+  // "The repo that used to pass doesn't" has two explanations - the repo
+  // changed, or the bar did - and nothing else in this output can tell
+  // them apart. A retuned threshold is invisible everywhere else.
+  it("reports the fingerprint and the languages in force", async () => {
+    const { report } = await run();
+
+    expect(check(report, "rules").ok).toBe(true);
+    expect(check(report, "rules").detail).toContain("3f1c0a9b2d4e5f60");
+    expect(check(report, "rules").detail).toContain("TypeScript");
+  });
+
+  it("fails when the instance publishes no thresholds", async () => {
+    const { report } = await run({ "/rules": jsonResponse(200, { fingerprint: "abc" }) });
+
+    expect(check(report, "rules").ok).toBe(false);
+    expect(report.passed).toBe(false);
+  });
+
+  it("fails when /rules is not served at all", async () => {
+    const { report } = await run({ "/rules": jsonResponse(404, { error: "no route" }) });
+
+    expect(check(report, "rules").ok).toBe(false);
+  });
+});
+
+describe("runSmokeTest against a forge this instance has given up on", () => {
+  function readyWithCircuits(circuits: Record<string, unknown>): Response {
+    return jsonResponse(200, {
+      ready: true,
+      draining: false,
+      checks: { cache: { ok: true }, history: { ok: true } },
+      providerCircuits: circuits
+    });
+  }
+
+  it("passes when every forge is answering", async () => {
+    const { report } = await run();
+
+    expect(check(report, "provider circuits").ok).toBe(true);
+    expect(check(report, "provider circuits").detail).toContain("3 forge(s)");
+  });
+
+  // Without this, an eligibility check failing against one forge is a
+  // mysterious 503. With it, the report says which forge was given up on
+  // and what the error that did it was.
+  it("names the forge and the failure behind an open circuit", async () => {
+    const { report } = await run({
+      "/ready": readyWithCircuits({
+        github: { name: "GitHub", state: "closed", consecutiveFailures: 0 },
+        bitbucket: {
+          name: "Bitbucket",
+          state: "open",
+          consecutiveFailures: 5,
+          lastError: "500 from api.bitbucket.org"
+        }
+      })
+    });
+
+    const circuits = check(report, "provider circuits");
+    expect(circuits.ok).toBe(false);
+    expect(circuits.detail).toContain("bitbucket");
+    expect(circuits.detail).toContain("500 from api.bitbucket.org");
+  });
+
+  it("treats a half-open circuit as worth reporting too", async () => {
+    const { report } = await run({
+      "/ready": readyWithCircuits({
+        gitlab: { name: "GitLab", state: "half-open", consecutiveFailures: 5 }
+      })
+    });
+
+    expect(check(report, "provider circuits").ok).toBe(false);
+  });
+
+  // A smoke test whose job is checking a deployment should not fail it for
+  // being an older build than the CLI.
+  it("says so, rather than failing, when the build reports no circuits", async () => {
+    const { report } = await run({
+      "/ready": jsonResponse(200, {
+        ready: true,
+        draining: false,
+        checks: { cache: { ok: true }, history: { ok: true } }
+      })
+    });
+
+    const circuits = check(report, "provider circuits");
+    expect(circuits.ok).toBe(true);
+    expect(circuits.detail).toContain("not reported");
+  });
+
+  // A breaker opens because calls failed, so asking before any call has
+  // been made can only ever say "closed".
+  it("asks after the evaluations, not before them", async () => {
+    const { report } = await run();
+    const names = report.checks.map((c) => c.name);
+
+    expect(names.indexOf("provider circuits")).toBeGreaterThan(
+      names.findIndex((name) => name.startsWith("eligibility:"))
+    );
   });
 });
