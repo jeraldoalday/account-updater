@@ -1,4 +1,6 @@
 import { HttpError, RequestTimeoutError } from "../net/httpJson";
+import { isNetworkError } from "../net/networkErrors";
+import { isRateLimitError } from "../net/rateLimitInfo";
 import {
   DEFAULT_RETRY_OPTIONS,
   retrying,
@@ -41,4 +43,22 @@ export async function withRetry<T>(
   options: RetryOptions = DEFAULT_RETRY_OPTIONS
 ): Promise<T> {
   return retrying(fn, { ...options, isRetryable, retryAfterMs });
+}
+
+/**
+ * Whether a failure is evidence that GitLab itself is unavailable.
+ *
+ * Diverges from `isRetryable` in both directions, for the same reasons on
+ * every forge: a timeout is not worth retrying (it has already waited the
+ * full ceiling) but is strong evidence the upstream is not answering, and
+ * rate limiting is not evidence about the upstream's health at all - the
+ * quota is ours, and the caller is better served by the reset time GitLab
+ * reported than by being told GitLab is down.
+ */
+export function isUpstreamUnavailable(err: unknown): boolean {
+  if (isRateLimitError(err)) return false;
+  if (err instanceof RequestTimeoutError) return true;
+  const status = (err as HttpError)?.status;
+  if (typeof status === "number") return status >= 500;
+  return isNetworkError(err);
 }

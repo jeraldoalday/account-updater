@@ -8,7 +8,9 @@ import { UnsupportedProviderError } from "../src/providers/provider";
 import { GitHubProvider } from "../src/providers/github/githubProvider";
 import { GitLabProvider } from "../src/providers/gitlab/gitlabProvider";
 import { BitbucketProvider } from "../src/providers/bitbucket/bitbucketProvider";
+import { GuardedProvider } from "../src/providers/guardedProvider";
 import { PROVIDER_IDS, type ProviderId } from "../src/providers/hosts";
+import type { RepoProvider } from "../src/providers/provider";
 
 // Constructing a GitHubProvider builds an Octokit instance; stub the
 // network layer away so these tests stay offline and fast.
@@ -18,10 +20,28 @@ vi.mock("@octokit/rest", () => ({
   }
 }));
 
+/**
+ * The provider the registry actually built, behind the circuit breaker
+ * every provider is wrapped in. Which forge's client is inside is still
+ * worth asserting - it is what the registry's map is for - and the
+ * wrapping is asserted separately below.
+ */
+function unwrap(provider: RepoProvider): RepoProvider {
+  return (provider as unknown as { inner: RepoProvider }).inner;
+}
+
 describe("provider registry", () => {
+  it("guards every provider it builds with its forge's circuit breaker", () => {
+    // Applied here rather than inside the three adapters, so a fourth
+    // forge cannot be added without one.
+    for (const id of supportedProviderIds()) {
+      expect(createProvider(id)).toBeInstanceOf(GuardedProvider);
+    }
+  });
+
   it("builds a GitHub provider for github refs", () => {
     const provider = createProvider("github");
-    expect(provider).toBeInstanceOf(GitHubProvider);
+    expect(unwrap(provider)).toBeInstanceOf(GitHubProvider);
     expect(provider.id).toBe("github");
   });
 
@@ -33,13 +53,13 @@ describe("provider registry", () => {
 
   it("builds a GitLab provider for gitlab refs", () => {
     const provider = createProvider("gitlab");
-    expect(provider).toBeInstanceOf(GitLabProvider);
+    expect(unwrap(provider)).toBeInstanceOf(GitLabProvider);
     expect(provider.id).toBe("gitlab");
   });
 
   it("builds a Bitbucket provider for bitbucket refs", () => {
     const provider = createProvider("bitbucket");
-    expect(provider).toBeInstanceOf(BitbucketProvider);
+    expect(unwrap(provider)).toBeInstanceOf(BitbucketProvider);
     expect(provider.id).toBe("bitbucket");
   });
 

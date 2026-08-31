@@ -1,6 +1,8 @@
 import { BitbucketProvider } from "./bitbucket/bitbucketProvider";
 import { GitHubProvider } from "./github/githubProvider";
 import { GitLabProvider } from "./gitlab/gitlabProvider";
+import { breakerFor } from "./breakers";
+import { GuardedProvider } from "./guardedProvider";
 import { PROVIDER_IDS, type ProviderId } from "./hosts";
 import {
   UnsupportedProviderError,
@@ -79,5 +81,11 @@ export function createProvider(id: ProviderId, token?: string): RepoProvider {
   if (!implementation) {
     throw new UnsupportedProviderError(id, supportedProviderIds());
   }
-  return implementation.factory(token);
+  // Wrapped here rather than inside each adapter, so a forge cannot be
+  // added without its breaker: the seam that makes a new provider one
+  // entry in this map is the same seam that makes it impossible to
+  // forget. The breaker is per-forge and lives for the process, while the
+  // provider itself is per-request (it carries the caller's token), which
+  // is why the two are joined at this point and not in the constructor.
+  return new GuardedProvider(implementation.factory(token), breakerFor(id));
 }

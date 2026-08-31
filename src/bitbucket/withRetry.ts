@@ -1,4 +1,6 @@
 import { HttpError, RequestTimeoutError } from "../net/httpJson";
+import { isNetworkError } from "../net/networkErrors";
+import { isRateLimitError } from "../net/rateLimitInfo";
 import {
   DEFAULT_RETRY_OPTIONS,
   retrying,
@@ -54,4 +56,22 @@ export async function withRetry<T>(
   options: RetryOptions = DEFAULT_RETRY_OPTIONS
 ): Promise<T> {
   return retrying(fn, { ...options, isRetryable, retryAfterMs });
+}
+
+/**
+ * Whether a failure is evidence that Bitbucket itself is unavailable.
+ *
+ * The same shape as the other two forges' policies. Worth noting for this
+ * one: a 401 from a revoked BITBUCKET_TOKEN must not count. It is a
+ * configuration mistake that will fail identically forever, and letting it
+ * open a breaker would report a credential problem as an outage - sending
+ * an operator to Bitbucket's status page instead of to their own
+ * environment.
+ */
+export function isUpstreamUnavailable(err: unknown): boolean {
+  if (isRateLimitError(err)) return false;
+  if (err instanceof RequestTimeoutError) return true;
+  const status = (err as HttpError)?.status;
+  if (typeof status === "number") return status >= 500;
+  return isNetworkError(err);
 }

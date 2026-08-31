@@ -3,6 +3,7 @@ import { z } from "zod";
 import { parseRepoRef } from "../utils/repoUrl";
 import { evaluateEligibility } from "../eligibility/evaluate";
 import { extractRateLimitInfo, type RateLimitInfo } from "../net/rateLimitInfo";
+import { CircuitOpenError } from "../net/circuitBreaker";
 import { UnsupportedProviderError } from "../providers/provider";
 import { describeRef, providerDisplayName } from "../providers/hosts";
 import { mapWithConcurrency } from "../utils/concurrency";
@@ -66,7 +67,20 @@ export function eligibilityRequestCost(req: Request): number {
 
 type EligibilityOutcome =
   | { ok: true; result: EligibilityResult }
-  | { ok: false; status: number; error: string; rateLimit?: RateLimitInfo };
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      /**
+       * How long the caller should wait, for the `Retry-After` header.
+       * Separate from `rateLimit` because not every wait is about a quota:
+       * a circuit-breaker refusal knows exactly how long its cooldown has
+       * left, and reporting that under a `rateLimit` key would tell the
+       * caller their quota is exhausted when it is untouched.
+       */
+      retryAfterSeconds?: number;
+      rateLimit?: RateLimitInfo;
+    };
 
 async function tryEvaluate(
   ref: RepoRef,
@@ -85,6 +99,19 @@ async function tryEvaluate(
       return { ok: false, status: 400, error: (err as Error).message };
     }
 
+    // The forge has been failing every call, so this request was refused
+    // without one. 503 with a Retry-After the breaker actually knows -
+    // it is counting down its own cooldown - rather than a 502 that
+    // invites an immediate retry into the same closed door.
+    if (err instanceof CircuitOpenError) {
+      return {
+        ok: false,
+        status: 503,
+        error: `${err.message} (evaluating ${describeRef(ref)})`,
+        retryAfterSeconds: Math.ceil(err.retryAfterMs / 1000)
+      };
+    }
+
     const rateLimit = extractRateLimitInfo(err);
     if (rateLimit) {
       // Named from the ref's forge rather than hardcoded. This message was
@@ -96,6 +123,9 @@ async function tryEvaluate(
         ok: false,
         status: 503,
         error: `${providerDisplayName(ref.provider)} API rate limit hit while evaluating ${describeRef(ref)}. Try again later.`,
+        ...(rateLimit.retryAfterSeconds !== undefined
+          ? { retryAfterSeconds: rateLimit.retryAfterSeconds }
+          : {}),
         rateLimit
       };
     }
@@ -136,8 +166,8 @@ eligibilityRouter.post("/check", async (req, res) => {
 
   const outcome = await tryEvaluate(ref, token, cacheable, parsed.data.refresh ?? false);
   if (!outcome.ok) {
-    if (outcome.rateLimit?.retryAfterSeconds !== undefined) {
-      res.setHeader("Retry-After", String(outcome.rateLimit.retryAfterSeconds));
+    if (outcome.retryAfterSeconds !== undefined) {
+      res.setHeader("Retry-After", String(outcome.retryAfterSeconds));
     }
     res.status(outcome.status).json({
       error: outcome.error,
@@ -175,6 +205,9 @@ eligibilityRouter.post("/check-batch", async (req, res) => {
         return {
           repo: describeRef(ref),
           error: outcome.error,
+          ...(outcome.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: outcome.retryAfterSeconds }
+            : {}),
           ...(outcome.rateLimit ? { rateLimit: outcome.rateLimit } : {})
         };
       }

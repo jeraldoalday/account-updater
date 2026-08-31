@@ -60,6 +60,18 @@ const configSchema = z
       .int()
       .positive()
       .default(6 * 60 * 60 * 1000),
+    // How many consecutive unavailable-shaped failures from one forge
+    // stop this instance calling it, and for how long. Per-forge, so one
+    // forge being down never affects checks for repos on the others. The
+    // threshold is low because the evidence is strong: these are failures
+    // that already survived the retry loop, so three of them in a row is
+    // an upstream that has failed roughly a dozen attempts.
+    circuitBreakerFailureThreshold: z.coerce.number().int().positive().default(5),
+    circuitBreakerOpenMs: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30 * 1000),
     // Applies to /eligibility, the endpoint that clones a repo and calls a
     // provider's API, so it's the one worth protecting from abuse.
     rateLimitWindowMs: z.coerce
@@ -115,6 +127,8 @@ function loadConfig() {
     historyDbPath: optionalEnv("HISTORY_DB_PATH"),
     historyRetentionDays: optionalEnv("HISTORY_RETENTION_DAYS"),
     historyPruneIntervalMs: optionalEnv("HISTORY_PRUNE_INTERVAL_MS"),
+    circuitBreakerFailureThreshold: optionalEnv("CIRCUIT_BREAKER_FAILURE_THRESHOLD"),
+    circuitBreakerOpenMs: optionalEnv("CIRCUIT_BREAKER_OPEN_MS"),
     rateLimitWindowMs: optionalEnv("RATE_LIMIT_WINDOW_MS"),
     rateLimitMax: optionalEnv("RATE_LIMIT_MAX"),
     shutdownDrainMs: optionalEnv("SHUTDOWN_DRAIN_MS"),

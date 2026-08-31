@@ -1,3 +1,4 @@
+import { isNetworkError } from "../net/networkErrors";
 import { isRateLimitError } from "../net/rateLimitInfo";
 import {
   DEFAULT_RETRY_OPTIONS,
@@ -43,4 +44,27 @@ export async function withRetry<T>(
   options: RetryOptions = DEFAULT_RETRY_OPTIONS
 ): Promise<T> {
   return retrying(fn, { ...options, isRetryable, retryAfterMs });
+}
+
+/**
+ * Whether a failure is evidence that GitHub itself is unavailable, as
+ * opposed to evidence about this request.
+ *
+ * Close to `isRetryable` but deliberately not the same predicate, and the
+ * two differences are the interesting part:
+ *
+ * - Rate limiting does not count. The quota is ours, not GitHub's health,
+ *   and the service already answers a rate-limited check with the reset
+ *   time GitHub reported. Letting it trip a breaker would replace that
+ *   precise answer with "GitHub is not answering", which is false and
+ *   sends the caller looking in the wrong place.
+ * - A network failure does count, even though it is never retried here.
+ *   A refused connection or a DNS failure is the clearest evidence there
+ *   is that the forge is unreachable.
+ */
+export function isUpstreamUnavailable(err: unknown): boolean {
+  if (isRateLimitError(err)) return false;
+  const status = (err as OctokitLikeError)?.status;
+  if (typeof status === "number") return status >= 500;
+  return isNetworkError(err);
 }
