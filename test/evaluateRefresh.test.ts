@@ -36,7 +36,7 @@ vi.mock("../src/cache/createCache", () => ({
   })
 }));
 
-const { evaluateEligibility } = await import("../src/eligibility/evaluate");
+const { cacheKeyFor, evaluateEligibility } = await import("../src/eligibility/evaluate");
 const { createApp } = await import("../src/app");
 
 const ref = { provider: "github" as const, owner: "acme", repo: "widgets" };
@@ -106,7 +106,7 @@ describe("evaluateEligibility with refresh", () => {
     await evaluateEligibility({ ...ref, repo: "stored" }, undefined, { refresh: true });
 
     expect(cacheSet).toHaveBeenCalledWith(
-      "github/acme/stored",
+      cacheKeyFor({ ...ref, repo: "stored" }),
       expect.objectContaining({ eligible: true })
     );
   });

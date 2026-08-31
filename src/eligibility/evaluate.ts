@@ -8,6 +8,7 @@ import { createCache } from "../cache/createCache";
 import { createHistoryStore } from "../history/createHistoryStore";
 import { metrics } from "../metrics/metrics";
 import { createProvider } from "../providers/registry";
+import { RULE_SET_FINGERPRINT } from "./ruleSet";
 import { defaultTokenFor } from "../providers/credentials";
 import { describeRef } from "../providers/hosts";
 import type { EligibilityResult, RepoRef } from "../types";
@@ -160,6 +161,19 @@ async function computeEligibility(
   return result;
 }
 
+/**
+ * The key a repo's verdict is cached under.
+ *
+ * Provider-scoped, because "acme/widgets" on two forges are two different
+ * projects and a shared Redis cache must not serve one for the other. And
+ * rule-set-scoped, because a verdict is only meaningful alongside the
+ * thresholds and language list that produced it - see RULE_SET_FINGERPRINT
+ * for what goes wrong without it.
+ */
+export function cacheKeyFor(ref: RepoRef): string {
+  return `${RULE_SET_FINGERPRINT}/${ref.provider}/${ref.owner}/${ref.repo}`;
+}
+
 export async function evaluateEligibility(
   ref: RepoRef,
   token: string | undefined,
@@ -167,9 +181,7 @@ export async function evaluateEligibility(
 ): Promise<EligibilityResult> {
   const cacheable = options.cacheable ?? true;
   const refresh = options.refresh ?? false;
-  // Provider-scoped: "acme/widgets" on two forges are two different
-  // projects, and a shared Redis cache must not serve one for the other.
-  const cacheKey = `${ref.provider}/${ref.owner}/${ref.repo}`;
+  const cacheKey = cacheKeyFor(ref);
 
   if (!cacheable) {
     return computeEligibility(ref, token);
