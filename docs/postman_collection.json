@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "account-updater v1.2.0",
+    "name": "account-updater v1.3.0",
     "description": "Checks whether a repo meets the eligibility requirements to connect an account. Repo references on github, gitlab, bitbucket are recognized and evaluated.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

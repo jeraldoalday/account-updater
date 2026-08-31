@@ -13,6 +13,85 @@ This file started partway through the project's life, so the 1.0.0 entries
 below were reconstructed from the commit history rather than written as the
 work landed. Everything after that release is written as it lands.
 
+## [1.3.0] - 2026-08-31
+
+Verdicts that stay true to the rules that produced them, a limit that
+counts the work it is limiting, and an outage that costs one forge rather
+than three.
+
+### Added
+
+- `GET /rules` - the bar a repo is measured against: the size, history,
+  and active-development thresholds, the per-signal weights behind the
+  blended score, and which languages count. Previously the only way to
+  learn a threshold was to be rejected by it, one check at a time, and the
+  alternative - an integrator writing the numbers into their own docs - is
+  a copy that goes stale the first time one is retuned. Served off the
+  same values the checks read, so it cannot describe a bar the service
+  doesn't enforce. Unauthenticated and outside the rate limit, like
+  `/providers`.
+- A **circuit breaker per forge**. After
+  `CIRCUIT_BREAKER_FAILURE_THRESHOLD` consecutive failures that look like
+  the forge being unavailable, this instance stops calling it for
+  `CIRCUIT_BREAKER_OPEN_MS` and answers 503 immediately with a
+  `Retry-After` it can actually justify, then probes with a single request.
+  Every call to a hard-down forge otherwise walked the full retry schedule
+  at `PROVIDER_REQUEST_TIMEOUT_MS` per attempt, so one forge's outage could
+  occupy enough connections to stop the service answering about the other
+  two. Which failures count is per-forge: a 404, a rejected credential, and
+  rate limiting are all answers, and an upstream that answers is up.
+- `CIRCUIT_BREAKER_FAILURE_THRESHOLD` and `CIRCUIT_BREAKER_OPEN_MS`.
+  Defaults: 5 failures, 30000ms.
+- `GET /admin/evaluations/changes` - where a repo's verdict flipped,
+  newest first, with the direction, the reasons the new verdict came with,
+  and when the previous evaluation ran. Filterable by repo, direction, and
+  window. The row list answers what happened and the summary answers how
+  often; this answers which repos changed their mind, which previously
+  meant pulling every row and diffing them by hand.
+- Circuit state per forge in `/metrics`, `/metrics/prometheus`, and
+  `/ready`. Reported for every forge including the healthy ones, since a
+  series that only appears when something breaks cannot be alerted on, and
+  its absence is indistinguishable from a failed scrape. It deliberately
+  does not fail `/ready`: a forge being down is not this instance's fault,
+  and failing readiness over it would pull every instance out of rotation
+  and take down the forges that still work.
+- `npm run doctor` reviews the new settings, and warns when
+  `RATE_LIMIT_MAX` is below the batch cap - under which a full-size batch
+  is refused every time, however long the caller waits.
+- `npm run smoke` reports which rule set an instance is enforcing and
+  whether it has given up on any forge.
+
+### Changed
+
+- **The `/eligibility` rate limit is now counted in repos, not requests.**
+  A batch spends one unit per repo it lists. Every request cost one unit
+  before, so a caller sending batches of 20 instead of single checks got
+  400 clones a minute out of an allowance that reads as 20 - and an
+  operator setting `RATE_LIMIT_MAX` was sizing a limit that meant twenty
+  times less than they thought. A single check is unaffected.
+- A 503 that carries a wait now reports it as `retryAfterSeconds`
+  separately from `rateLimit`, so a circuit-breaker cooldown isn't
+  described as an exhausted quota.
+
+### Fixed
+
+- **A cached verdict no longer outlives the rules that produced it.**
+  Cache keys carried the repo and forge but nothing about the thresholds,
+  so narrowing `ELIGIBLE_LANGUAGES` or raising a threshold left every
+  recently-checked repo being answered from the old rules for a full
+  `CACHE_TTL_MS` - the setting reads as having taken effect and hasn't.
+  Worse, a rolling deploy against one Redis had whichever build warmed a
+  key decide the answer both served, which doesn't clear when the TTL
+  expires. Keys are now namespaced by a fingerprint of the thresholds,
+  weights, language list, and build; a release starts with a cold cache as
+  a result.
+- **A `refresh` is no longer answered by work that started before the
+  caller asked for it.** It joined whatever evaluation of that repo was
+  already running, which may have cloned the repo or read its commit
+  history before the caller's fix landed - so the recheck reported the
+  problem still there, and refreshing again joined the same stale
+  computation. Refreshes arriving together still share one clone.
+
 ## [1.2.0] - 2026-08-24
 
 Bitbucket support, and the scoring bug it uncovered.

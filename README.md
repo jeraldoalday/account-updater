@@ -143,11 +143,22 @@ API contributes. It needs no API key and is not rate-limited: it reads two
 in-memory tables, and a client asking what it may send has not sent
 anything yet.
 
+`GET /rules` publishes the bar a repo is measured against: the size,
+history, and active-development thresholds, the per-signal weights behind
+the blended active-development score, and which languages count. Served
+from the same values the checks read, so it cannot describe a bar the
+service doesn't enforce, and a test fails if a threshold is added without
+appearing there. It needs no API key either — a caller who can be told
+what is missing before submitting doesn't have to learn the bar one
+rejection at a time. The `fingerprint` it carries identifies the rule set,
+so two results carrying the same one were decided by the same rules: a
+verdict that changed can be read as the repo moving rather than the bar.
+
 `GET /metrics` returns in-memory counters (request volume by status class,
 eligibility pass/fail counts both in total and split by forge, cache
 hit/miss counts, and per-stage count/avg/max duration for each evaluation
 stage - clone+scan, commit history, push events - so a slow check is
-diagnosable by stage) —
+diagnosable by stage, and each forge's circuit-breaker state) —
 per-process only, not aggregated across instances. The same data is also
 available at `GET /metrics/prometheus` in Prometheus's text exposition
 format, for scraping directly instead of polling the JSON endpoint.
@@ -231,6 +242,14 @@ supplies its own `token` is never cached, since a cached result could
 otherwise leak a private repo's outcome to a caller who supplied a
 different token.
 
+Cache keys are namespaced by the forge and by the rule set that produced
+the verdict — the thresholds, the weights, the eligible-language list, and
+the build (the `fingerprint` from `GET /rules`). A cached verdict is only
+meaningful alongside the rules it was computed under, so retuning a
+threshold takes effect immediately instead of after a TTL window of
+answers from the old rules, and a rolling deploy sharing one Redis can't
+have one build serve the other build's verdicts.
+
 The cache backend is `memory` by default (per-process, lost on restart —
 fine for a single instance). Set `CACHE_BACKEND=redis` and `REDIS_URL` to
 share cached results across multiple instances of the service instead.
@@ -244,7 +263,12 @@ mysteriously collapsed hit rate.
 
 Concurrent cacheable requests for the same repo that all miss the cache
 share a single in-flight computation rather than each cloning and
-re-checking the repo independently.
+re-checking the repo independently. A `refresh` only shares work that
+started after the request arrived: it means "the thing you rejected this
+repo for is fixed, look again", and an evaluation already running may have
+read the repo before the fix landed. Refreshes arriving together still
+share one clone, so a client retrying in a loop costs one clone rather
+than one per attempt.
 
 Every evaluation actually performed (a cache hit doesn't count again) is
 recorded to a SQLite audit trail — repo, timestamp, eligible, reasons — at
@@ -262,6 +286,21 @@ wrong" are different answers.
 
 ```bash
 curl -s 'localhost:3000/admin/evaluations?eligible=false&since=2026-08-01T00:00:00Z' | jq
+```
+
+`GET /admin/evaluations/changes` answers the question the trail is usually
+opened for after a threshold is retuned, or when a caller reports that a
+repo which used to pass has started failing: which repos changed their
+verdict, and which way. It reports the evaluations at which a verdict
+flipped, newest first, with the direction, the reasons the new verdict came
+with, and when the previous evaluation ran. Filterable by `?repo=`,
+`?direction=became-eligible|became-ineligible`, `?since=`/`?until=`, and
+`?limit=`. A repo's first evaluation inside the window is never a change —
+there is nothing before it to differ from — so narrowing `since` hides
+changes whose earlier verdict fell outside it.
+
+```bash
+curl -s 'localhost:3000/admin/evaluations/changes?direction=became-ineligible' | jq
 ```
 
 ## Providers
@@ -312,6 +351,40 @@ response, with `null` for one that could not be measured.
 Bitbucket is the case that shape was built for: Bitbucket Cloud has no
 repository events API, so those repos are always scored on three signals
 rather than four.
+
+## When a forge stops answering
+
+Each forge has its own circuit breaker. After
+`CIRCUIT_BREAKER_FAILURE_THRESHOLD` consecutive failures that look like the
+forge itself being unavailable (5xx, timeouts, refused connections — not
+404s, credential failures, or rate limiting), this instance stops calling
+it for `CIRCUIT_BREAKER_OPEN_MS` and answers 503 immediately with a
+`Retry-After` the breaker knows, then lets one request through to find out
+whether the forge is back.
+
+The alternative is worse than it sounds. Every call to a hard-down forge
+walks the full retry schedule and pays `PROVIDER_REQUEST_TIMEOUT_MS` per
+attempt, so what should be a fast failure becomes a request holding a
+connection for most of a minute — and enough of those in flight and the
+service stops answering about the two forges that are fine. Per-forge
+breakers are what keeps one outage from becoming three.
+
+Which failures count is each forge's own judgement, kept next to its retry
+policy, because the same status means different things on different forges:
+Bitbucket answers a revoked token with 401 where GitLab says 403, and
+GitHub uses 403 for both rate limiting and plain permission failures.
+Reading any of those as an outage would report a configuration mistake as
+one. Rate limiting is excluded too — the quota is the caller's, not the
+forge's health, and the service already answers with the reset time the
+forge reported.
+
+Breaker state is reported per forge in `/metrics`, `/metrics/prometheus`
+(as a gauge, plus the consecutive-failure count that climbs before anything
+is refused), and `/ready`. It deliberately does not make `/ready` fail: a
+forge being down is not this instance's fault and not something another
+instance would do better, so failing readiness over it would pull every
+instance out of rotation and take down the forges that still work. `npm run
+smoke` reports it too, after its evaluations rather than before them.
 
 ## Known limitations
 
