@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { MAX_ECHOED_PATH_LENGTH, truncate } from "../utils/truncate";
 
 interface BodyParserSyntaxError extends SyntaxError {
   status?: number;
@@ -25,7 +26,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
       level: "error",
       requestId: req.id,
       method: req.method,
-      path: req.originalUrl,
+      // Bounded, same as the access log and the 404 body: the path is
+      // caller-chosen, and an unbounded echo of it makes filling a log
+      // budget as cheap as sending long URLs - no less true on the error
+      // path than on the happy one.
+      path: truncate(req.originalUrl, MAX_ECHOED_PATH_LENGTH),
       message: err instanceof Error ? err.message : String(err),
       time: new Date().toISOString()
     })

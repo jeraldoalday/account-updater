@@ -13,6 +13,16 @@ This file started partway through the project's life, so the 1.0.0 entries
 below were reconstructed from the commit history rather than written as the
 work landed. Everything after that release is written as it lands.
 
+## [Unreleased]
+
+### Fixed
+
+- The error log bounds the request path it echoes, the same way the access
+  log and the 404 body already do - previously a long caller-chosen URL
+  that triggered a 500 was logged in full, so the same log-budget cost the
+  access-log fix closed off on the happy path was still open on the error
+  one.
+
 ## [1.3.0] - 2026-08-31
 
 Verdicts that stay true to the rules that produced them, a limit that

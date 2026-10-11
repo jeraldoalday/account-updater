@@ -3,6 +3,7 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requestId } from "../src/middleware/requestId";
 import { errorHandler } from "../src/middleware/errorHandler";
+import { MAX_ECHOED_PATH_LENGTH } from "../src/utils/truncate";
 
 function appThatThrows(err: unknown) {
   const app = express();
@@ -48,6 +49,17 @@ describe("errorHandler", () => {
     expect(logged.level).toBe("error");
     expect(logged.message).toBe("internal secret detail");
     expect(logged.requestId).toBeTruthy();
+  });
+
+  it("truncates a long request path before logging it, same as the access log", async () => {
+    const app = appThatThrows(new Error("boom"));
+    const longSuffix = "a".repeat(MAX_ECHOED_PATH_LENGTH + 50);
+
+    await request(app).get(`/boom?${longSuffix}`);
+
+    const logged = JSON.parse(consoleErrorSpy.mock.calls[0][0] as string);
+    expect(logged.path.length).toBeLessThanOrEqual(MAX_ECHOED_PATH_LENGTH + "...".length);
+    expect(logged.path.endsWith("...")).toBe(true);
   });
 
   it("handles a thrown non-Error value without crashing", async () => {
