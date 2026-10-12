@@ -264,4 +264,16 @@ describe("GET /admin/evaluations/changes", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("rejects a window that closes before it opens, rather than answering an empty list", async () => {
+    const { createApp } = await import("../src/app");
+
+    const res = await request(createApp()).get("/admin/evaluations/changes").query({
+      since: "2026-08-20T00:00:00.000Z",
+      until: "2026-08-01T00:00:00.000Z"
+    });
+
+    expect(res.status).toBe(400);
+    expect(listedStore.verdictChanges).not.toHaveBeenCalled();
+  });
 });

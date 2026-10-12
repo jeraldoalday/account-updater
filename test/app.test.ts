@@ -353,6 +353,16 @@ describe("app", () => {
       expect(listEvaluations).not.toHaveBeenCalled();
     });
 
+    it("rejects a window that closes before it opens, rather than listing nothing", async () => {
+      const res = await request(createApp()).get("/admin/evaluations").query({
+        since: "2026-08-20T00:00:00Z",
+        until: "2026-08-01T00:00:00Z"
+      });
+
+      expect(res.status).toBe(400);
+      expect(listEvaluations).not.toHaveBeenCalled();
+    });
+
     it("rejects an unparseable repo query param", async () => {
       const res = await request(createApp())
         .get("/admin/evaluations")

@@ -247,6 +247,16 @@ describe("GET /admin/evaluations/summary", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects a window that closes before it opens, rather than summarizing an empty window", async () => {
+    const res = await request(createApp()).get("/admin/evaluations/summary").query({
+      since: "2026-08-20T00:00:00.000Z",
+      until: "2026-08-01T00:00:00.000Z"
+    });
+
+    expect(res.status).toBe(400);
+    expect(summarize).not.toHaveBeenCalled();
+  });
+
   it("caps how many reason groups a caller can ask for", async () => {
     const res = await request(createApp())
       .get("/admin/evaluations/summary")

@@ -11,8 +11,11 @@ const MAX_TOP_REASONS = 20;
 
 // Express gives query values as strings, so booleans and timestamps are
 // parsed here rather than trusted: an unparseable `since` must be a 400,
-// not a filter that silently matches nothing.
-const querySchema = z.object({
+// not a filter that silently matches nothing. Kept as a plain object
+// (rather than already carrying the window refinement below) so the two
+// routes that specialize it via .omit()/.extend() still can - only an
+// object schema has those, not the ZodEffects a .refine() returns.
+const baseQuerySchema = z.object({
   repo: z.string().min(1).optional(),
   eligible: z
     .enum(["true", "false"])
@@ -23,13 +26,35 @@ const querySchema = z.object({
   limit: z.coerce.number().int().positive().max(MAX_LIMIT).optional()
 });
 
-const changesQuerySchema = querySchema
-  .omit({ eligible: true })
-  .extend({ direction: z.enum(["became-eligible", "became-ineligible"]).optional() });
+// A window that closes before it opens is the same mistake an unparseable
+// timestamp is - a caller filter gone wrong - and deserves the same
+// treatment: a 400 naming the problem, not a query that runs and quietly
+// returns nothing. Shared across all three routes below since each accepts
+// its own `since`/`until` pair.
+function sinceIsAfterUntil(since: string | undefined, until: string | undefined): boolean {
+  if (since === undefined || until === undefined) return false;
+  return new Date(since).getTime() > new Date(until).getTime();
+}
 
-const summaryQuerySchema = querySchema
+const windowRefinement = {
+  message: "`since` must not be after `until`",
+  path: ["since"]
+};
+
+const querySchema = baseQuerySchema.refine(
+  (data) => !sinceIsAfterUntil(data.since, data.until),
+  windowRefinement
+);
+
+const changesQuerySchema = baseQuerySchema
+  .omit({ eligible: true })
+  .extend({ direction: z.enum(["became-eligible", "became-ineligible"]).optional() })
+  .refine((data) => !sinceIsAfterUntil(data.since, data.until), windowRefinement);
+
+const summaryQuerySchema = baseQuerySchema
   .omit({ eligible: true, limit: true })
-  .extend({ topReasons: z.coerce.number().int().positive().max(MAX_TOP_REASONS).optional() });
+  .extend({ topReasons: z.coerce.number().int().positive().max(MAX_TOP_REASONS).optional() })
+  .refine((data) => !sinceIsAfterUntil(data.since, data.until), windowRefinement);
 
 /**
  * Shared by both admin routes: `repo` arrives as free text and has to

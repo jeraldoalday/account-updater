@@ -28,6 +28,12 @@ work landed. Everything after that release is written as it lands.
   lands between its two UTF-16 code units - previously the leftover lone
   surrogate showed up as a literal replacement character in the log line
   or response instead of the character it was part of.
+- `GET /admin/evaluations`, `/admin/evaluations/summary`, and
+  `/admin/evaluations/changes` now answer 400 when `since` is after
+  `until`, the same way an unparseable timestamp already does - previously
+  an inverted window ran as a query that matches nothing, which reads as
+  "no evaluations happened" rather than as the caller mistake it actually
+  is.
 
 ## [1.3.0] - 2026-08-31
 

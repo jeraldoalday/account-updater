@@ -326,7 +326,11 @@ export const openApiSpec = {
               }
             }
           },
-          "400": { description: "Invalid `repo` or `limit` query parameter." },
+          "400": {
+            description:
+              "Invalid `repo`, `since`, `until`, or `limit` query parameter, or a `since` " +
+              "after `until`."
+          },
           "401": { description: "Missing or invalid API key (only when API_KEY is configured)." }
         }
       }
@@ -392,7 +396,8 @@ export const openApiSpec = {
             }
           },
           "400": {
-            description: "An unparseable repo, direction, timestamp, or limit.",
+            description:
+              "An unparseable repo, direction, timestamp, or limit, or a `since` after `until`.",
             content: {
               "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } }
             }
@@ -450,7 +455,10 @@ export const openApiSpec = {
               }
             }
           },
-          "400": { description: "Invalid `repo`, `since`, `until`, or `topReasons`." },
+          "400": {
+            description:
+              "Invalid `repo`, `since`, `until`, or `topReasons`, or a `since` after `until`."
+          },
           "401": { description: "Missing or invalid API key (only when API_KEY is configured)." }
         }
       }
