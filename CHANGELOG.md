@@ -22,6 +22,12 @@ work landed. Everything after that release is written as it lands.
   that triggered a 500 was logged in full, so the same log-budget cost the
   access-log fix closed off on the happy path was still open on the error
   one.
+- The shared truncation helper behind that bound, the 404 body, and a
+  provider's error message no longer splits a character outside the Basic
+  Multilingual Plane (most emoji, among others) in half when the cutoff
+  lands between its two UTF-16 code units - previously the leftover lone
+  surrogate showed up as a literal replacement character in the log line
+  or response instead of the character it was part of.
 
 ## [1.3.0] - 2026-08-31
 
