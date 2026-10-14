@@ -67,6 +67,7 @@ fail the other nineteen.
 | Clone + scan     | `src/clone/`, `src/analysis/sourceScan.ts`       | Temp shallow clone; per-language line/file counts          |
 | History analysis | `src/analysis/`                                  | Turn a commit sample into day/author/message distributions |
 | Checks           | `src/eligibility/`                               | The four checks and the thresholds they compare against    |
+| Circuit breaker  | `src/net/circuitBreaker.ts`, `src/providers/breakers.ts` | Per-forge breaker that stops calling a forge that's stopped answering |
 | Cache            | `src/cache/`                                     | Pluggable result cache (in-memory or Redis)                |
 | Audit trail      | `src/history/`                                   | SQLite record of every evaluation performed                |
 | Observability    | `src/metrics/`, `src/health/`                    | Counters, Prometheus rendering, readiness probe            |
@@ -194,9 +195,18 @@ about which failures are survivable:
 - **Audit-trail write fails** → logged and swallowed; a caller's check
   doesn't fail because a record couldn't be filed.
 - **Push-events API unavailable** → treated as a neutral, missing signal.
-- **GitHub rate limit** → 503 with a `Retry-After` header and the rate-limit
-  details, after retries with backoff are exhausted. Distinct from a 502,
-  which means the upstream broke in some other way.
+- **Provider rate limit** → 503 with a `Retry-After` header and the
+  rate-limit details, after retries with backoff are exhausted. Distinct
+  from a 502, which means the upstream broke in some other way.
+- **A forge stops answering** → after `CIRCUIT_BREAKER_FAILURE_THRESHOLD`
+  consecutive failures that look like an outage (not 404s, auth failures,
+  or rate limiting - those are answers), that forge's breaker opens and
+  every further call is refused immediately with a 503 and a
+  `retryAfterSeconds` the caller can act on, reported separately from
+  `rateLimit` so a cooldown doesn't read as an exhausted quota. One probe
+  is let through after `CIRCUIT_BREAKER_OPEN_MS` to find out whether the
+  forge is back. Per-forge, so one forge's outage never touches the other
+  two.
 
 That's also the reason `GET /ready` exists at all: because so little takes
 the service _down_, a degraded instance would otherwise look perfectly

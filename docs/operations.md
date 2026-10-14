@@ -157,8 +157,15 @@ format) expose the same counters. The ones worth an alert:
   check `cacheRefreshes`, which is counted separately for exactly this
   reason.
 - **`requestsByStatusClass` 5xx.** 502 is an upstream failure (clone or
-  API); 503 is either provider rate limiting (with `Retry-After` and
-  rate-limit details in the body) or a readiness failure.
+  API); 503 is provider rate limiting, a circuit breaker open for that
+  forge, or a readiness failure - the body tells you which.
+- **A forge's circuit sitting `open` in `providerCircuits`** (`/metrics`)
+  or `account_updater_provider_circuit_state` (`/metrics/prometheus`).
+  That forge has failed `CIRCUIT_BREAKER_FAILURE_THRESHOLD` times in a row
+  and this instance has stopped calling it for `CIRCUIT_BREAKER_OPEN_MS`.
+  Reported for every forge, including the healthy ones, so its absence
+  from a scrape isn't mistaken for "nothing is open" - check `lastError` on
+  the snapshot for what tripped it.
 - **`stageDurations`.** A slow check is diagnosable by stage —
   `cloneAndScan` vs `commitHistory` vs `pushEvents` — because those three
   run concurrently and a total duration alone can't separate them.
@@ -178,6 +185,14 @@ is in use for that forge: a per-request `token` beats the configured one
 configured token beats the App installation. An instance with no GitHub
 credential at all is on 60 requests an hour — `doctor` calls that one out
 as critical.
+
+**Every check against one forge returns 503 immediately, with
+`retryAfterSeconds` but no `rateLimit`.** That forge's circuit breaker is
+open, not its quota — the request was refused without ever calling the
+forge. Check `providerCircuits` in `/metrics` for `lastError` on that
+forge's breaker to see what tripped it, and `retryAfterMs` for when the
+next probe goes through. Other forges are unaffected; the breaker is
+per-forge on purpose.
 
 **Bitbucket checks fail while cloning works, or the reverse.** Bitbucket
 is the one forge whose API host differs from its clone host: the API is
