@@ -10,6 +10,8 @@ and pushed all at once. Exact thresholds live in
 The five known languages (TypeScript, JavaScript, Python, Go, Rust) can be
 narrowed further via `ELIGIBLE_LANGUAGES` — see `.env.example`.
 
+> **How this project is built:** I develop this service with AI coding agents. I decide what the eligibility rules should be, review each change and its tests, and merge what holds up.
+
 ## How it works
 
 For a given repo, the service:
