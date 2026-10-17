@@ -42,8 +42,10 @@ function parseError(input: string): Error {
 function isValidNamespace(provider: ProviderId, owner: string): boolean {
   if (!providerHost(provider).supportsNestedNamespaces) return OWNER_PATTERN.test(owner);
 
+  // `String.split` never returns an empty array - even "".split("/") is
+  // [""] - so only the upper bound here is reachable.
   const segments = owner.split("/");
-  if (segments.length === 0 || segments.length > MAX_NAMESPACE_DEPTH) return false;
+  if (segments.length > MAX_NAMESPACE_DEPTH) return false;
   return segments.every(
     (segment) => NAMESPACE_SEGMENT_PATTERN.test(segment) && segment !== "." && segment !== ".."
   );
