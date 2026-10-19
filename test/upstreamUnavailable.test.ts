@@ -41,6 +41,26 @@ describe("isNetworkError", () => {
     expect(isNetworkError(circular)).toBe(false);
   });
 
+  // The chain walk is bounded so a pathological (but non-circular) cause
+  // chain can't be used to make this check expensive. That bound is only
+  // meaningful if it actually stops the walk before the end of a long
+  // chain, which these two cases pin down on either side of it.
+  it("finds an errno within the bounded cause-chain depth", () => {
+    let chain: Error = errno("ECONNREFUSED");
+    for (let i = 0; i < 3; i++) {
+      chain = new Error(`wrap ${i}`, { cause: chain });
+    }
+    expect(isNetworkError(chain)).toBe(true);
+  });
+
+  it("stops walking the cause chain past the depth bound", () => {
+    let chain: Error = errno("ECONNREFUSED");
+    for (let i = 0; i < 6; i++) {
+      chain = new Error(`wrap ${i}`, { cause: chain });
+    }
+    expect(isNetworkError(chain)).toBe(false);
+  });
+
   it("is unbothered by a null or undefined error", () => {
     expect(isNetworkError(null)).toBe(false);
     expect(isNetworkError(undefined)).toBe(false);
