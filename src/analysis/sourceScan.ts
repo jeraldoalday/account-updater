@@ -35,7 +35,7 @@ const EXCLUDED_DIRS = new Set([
 ]);
 
 const EXCLUDED_FILE_PATTERNS = [
-  /\.min\.(js|css)$/,
+  /\.min\.(js|mjs|cjs|css)$/,
   /package-lock\.json$/,
   /yarn\.lock$/,
   /pnpm-lock\.yaml$/,

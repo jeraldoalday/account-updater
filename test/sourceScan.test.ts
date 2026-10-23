@@ -32,6 +32,8 @@ describe("scanSource", () => {
   it("ignores lockfiles and minified files", async () => {
     await writeFile(join(dir, "app.js"), "a\nb\n");
     await writeFile(join(dir, "app.min.js"), "a".repeat(5000));
+    await writeFile(join(dir, "bundle.min.mjs"), "a".repeat(5000));
+    await writeFile(join(dir, "bundle.min.cjs"), "a".repeat(5000));
     await writeFile(join(dir, "package-lock.json"), "{}");
 
     const result = await scanSource(dir);
