@@ -12,12 +12,25 @@ describe("normalizeCommitMessage", () => {
 });
 
 describe("isGenericCommitMessage", () => {
-  it.each(["wip", "WIP", "fix", "fixed", "update", "commit 42", "Day 3", ".", "a", ""])(
-    "flags %j as generic",
-    (message) => {
-      expect(isGenericCommitMessage(message)).toBe(true);
-    }
-  );
+  it.each([
+    "wip",
+    "WIP",
+    "fix",
+    "fixed",
+    "update",
+    "commit 42",
+    "Day 3",
+    "day-1",
+    "Step_12",
+    "part-#7",
+    "commit-1",
+    "commit_2",
+    ".",
+    "a",
+    ""
+  ])("flags %j as generic", (message) => {
+    expect(isGenericCommitMessage(message)).toBe(true);
+  });
 
   it.each([
     "Add rate limiting to the eligibility endpoint",

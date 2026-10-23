@@ -12,8 +12,9 @@ const GENERIC_MESSAGE_PATTERNS: RegExp[] = [
   /^stuff$/i,
   /^test(ing)?$/i,
   /^\.+$/,
-  /^commit(\s*#?\d+)?$/i,
-  /^(day|step|part)\s*#?\d+$/i,
+  /^commit[\s_-]*#?\d+$/i,
+  /^commit$/i,
+  /^(day|step|part)[\s_-]*#?\d+$/i,
   /^[a-z]$/i
 ];
 
