@@ -34,6 +34,18 @@ work landed. Everything after that release is written as it lands.
   an inverted window ran as a query that matches nothing, which reads as
   "no evaluations happened" rather than as the caller mistake it actually
   is.
+- The source-size scan behind the history check no longer counts a
+  minified `.mjs` or `.cjs` bundle against a repo's size, the same way a
+  minified `.js` or `.css` file is already excluded - previously a
+  vendored ESM/CJS bundle could push an otherwise-small repo over the
+  size limit for a file nobody wrote by hand.
+
+### Changed
+
+- Commit-message quality now recognizes generic placeholders like
+  `commit-12`, `commit_12`, and `day-3`, not only `commit 12` and `day 3`
+  - previously a hyphen- or underscore-separated counter slipped past the
+    generic-message check and was scored as real, descriptive history.
 
 ## [1.3.0] - 2026-08-31
 
