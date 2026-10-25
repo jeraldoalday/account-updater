@@ -27,6 +27,9 @@ describe("isGenericCommitMessage", () => {
     "commit_2",
     ".",
     "a",
+    "42",
+    "#7",
+    "001.",
     ""
   ])("flags %j as generic", (message) => {
     expect(isGenericCommitMessage(message)).toBe(true);

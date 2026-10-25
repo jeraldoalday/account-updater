@@ -1,5 +1,6 @@
 // Detects low-information commit messages: single-word placeholders, bare
-// sequence numbers, and other templated text that tools generating fake
+// sequence numbers (standalone, like "42", or prefixed with a label like
+// "commit #42"), and other templated text that tools generating fake
 // commit history tend to reuse verbatim across hundreds of commits. A real
 // message can legitimately say "wip" or "fix" once in a while - the signal
 // that matters is how often a sample leans on these, not any single hit.
@@ -15,7 +16,8 @@ const GENERIC_MESSAGE_PATTERNS: RegExp[] = [
   /^commit[\s_-]*#?\d+$/i,
   /^commit$/i,
   /^(day|step|part)[\s_-]*#?\d+$/i,
-  /^[a-z]$/i
+  /^[a-z]$/i,
+  /^#?\d+\.?$/
 ];
 
 export function normalizeCommitMessage(message: string): string {
