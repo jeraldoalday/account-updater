@@ -5,7 +5,7 @@ export const KNOWN_LANGUAGES = ["TypeScript", "JavaScript", "Python", "Go", "Rus
 export type AllowedLanguage = (typeof KNOWN_LANGUAGES)[number];
 
 export const LANGUAGE_EXTENSIONS: Record<AllowedLanguage, string[]> = {
-  TypeScript: [".ts", ".tsx"],
+  TypeScript: [".ts", ".tsx", ".mts", ".cts"],
   JavaScript: [".js", ".jsx", ".mjs", ".cjs"],
   Python: [".py"],
   Go: [".go"],

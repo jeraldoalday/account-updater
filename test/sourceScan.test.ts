@@ -42,6 +42,16 @@ describe("scanSource", () => {
     expect(result.byLanguage[0]).toEqual({ language: "JavaScript", lines: 2, files: 1 });
   });
 
+  it("counts .mts and .cts files as TypeScript", async () => {
+    await writeFile(join(dir, "loader.mts"), "a\nb\nc\n");
+    await writeFile(join(dir, "config.cts"), "a\nb\n");
+
+    const result = await scanSource(dir);
+
+    expect(result.totalFiles).toBe(2);
+    expect(result.byLanguage[0]).toEqual({ language: "TypeScript", lines: 5, files: 2 });
+  });
+
   it("picks the language with the most lines as primary", async () => {
     await writeFile(join(dir, "main.py"), Array(20).fill("x").join("\n"));
     await writeFile(join(dir, "script.js"), "x\n");

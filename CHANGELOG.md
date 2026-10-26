@@ -39,6 +39,11 @@ work landed. Everything after that release is written as it lands.
   minified `.js` or `.css` file is already excluded - previously a
   vendored ESM/CJS bundle could push an otherwise-small repo over the
   size limit for a file nobody wrote by hand.
+- The source scan now recognizes `.mts` and `.cts` files as TypeScript -
+  previously a repo written against Node's explicit ESM/CJS TypeScript
+  extensions had those files silently excluded from its line/file count
+  and primary-language detection, understating its size and sometimes its
+  primary language.
 
 ### Changed
 
