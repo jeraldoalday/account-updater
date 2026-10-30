@@ -23,6 +23,8 @@ const EXCLUDED_DIRS = new Set([
   "__pycache__",
   ".pytest_cache",
   ".mypy_cache",
+  ".tox", // per-environment copies of installed packages, not first-party source
+  ".eggs", // downloaded egg source for build-time dependencies
   "coverage",
   ".turbo",
   ".cache",

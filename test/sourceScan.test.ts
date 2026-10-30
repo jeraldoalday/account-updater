@@ -29,6 +29,21 @@ describe("scanSource", () => {
     expect(result.primaryLanguage).toBe("TypeScript");
   });
 
+  it("excludes .tox and .eggs directories from the scan", async () => {
+    await writeFile(join(dir, "main.py"), "a\nb\nc\n");
+
+    await mkdir(join(dir, ".tox", "py311", "lib"), { recursive: true });
+    await writeFile(join(dir, ".tox", "py311", "lib", "installed.py"), "x\ny\n");
+
+    await mkdir(join(dir, ".eggs", "somepkg"), { recursive: true });
+    await writeFile(join(dir, ".eggs", "somepkg", "vendored.py"), "x\ny\nz\n");
+
+    const result = await scanSource(dir);
+
+    expect(result.totalFiles).toBe(1);
+    expect(result.totalLines).toBe(3);
+  });
+
   it("ignores lockfiles and minified files", async () => {
     await writeFile(join(dir, "app.js"), "a\nb\n");
     await writeFile(join(dir, "app.min.js"), "a".repeat(5000));

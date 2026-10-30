@@ -44,6 +44,11 @@ work landed. Everything after that release is written as it lands.
   extensions had those files silently excluded from its line/file count
   and primary-language detection, understating its size and sometimes its
   primary language.
+- The source scan now excludes `.tox` and `.eggs` directories, the same
+  way `venv`/`.venv`/`node_modules` already are - previously a Python
+  repo's per-environment tox installs or downloaded egg sources could be
+  counted as first-party lines, inflating its size and occasionally its
+  primary-language verdict.
 
 ### Changed
 
