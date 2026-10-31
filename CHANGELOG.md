@@ -49,6 +49,11 @@ work landed. Everything after that release is written as it lands.
   repo's per-environment tox installs or downloaded egg sources could be
   counted as first-party lines, inflating its size and occasionally its
   primary-language verdict.
+- The source scan now excludes the `.yarn` directory, the same way
+  `node_modules` already is - previously a repo using Yarn Berry could
+  have its unplugged/cached dependencies or bundled release script
+  counted as first-party JavaScript, inflating its size and occasionally
+  its primary-language verdict.
 
 ### Changed
 

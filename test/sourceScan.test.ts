@@ -44,6 +44,21 @@ describe("scanSource", () => {
     expect(result.totalLines).toBe(3);
   });
 
+  it("excludes the .yarn directory from the scan", async () => {
+    await writeFile(join(dir, "app.ts"), "a\nb\nc\n");
+
+    await mkdir(join(dir, ".yarn", "unplugged", "somepkg"), { recursive: true });
+    await writeFile(join(dir, ".yarn", "unplugged", "somepkg", "index.js"), "x\ny\n");
+
+    await mkdir(join(dir, ".yarn", "releases"), { recursive: true });
+    await writeFile(join(dir, ".yarn", "releases", "yarn-4.0.0.cjs"), "x\ny\nz\n");
+
+    const result = await scanSource(dir);
+
+    expect(result.totalFiles).toBe(1);
+    expect(result.totalLines).toBe(3);
+  });
+
   it("ignores lockfiles and minified files", async () => {
     await writeFile(join(dir, "app.js"), "a\nb\n");
     await writeFile(join(dir, "app.min.js"), "a".repeat(5000));

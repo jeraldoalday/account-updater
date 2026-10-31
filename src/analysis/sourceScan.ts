@@ -17,6 +17,7 @@ const EXCLUDED_DIRS = new Set([
   ".nuxt",
   "target", // Rust/Go build output
   "vendor",
+  ".yarn", // Yarn Berry's cache/unplugged/releases - vendored or bundled, not first-party source
   "venv",
   ".venv",
   "env",
